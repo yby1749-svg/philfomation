@@ -20,6 +20,87 @@ exports.healthCheck = onRequest((req, res) => {
 });
 
 // ========================================
+// 1-1. 테스트 푸시 알림 전송
+// ========================================
+exports.sendTestNotification = onRequest(async (req, res) => {
+  // CORS 헤더
+  res.set("Access-Control-Allow-Origin", "*");
+  res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.set("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") {
+    res.status(204).send("");
+    return;
+  }
+
+  if (req.method !== "POST") {
+    res.status(405).json({ error: "Method not allowed" });
+    return;
+  }
+
+  const { userId, title, body } = req.body;
+
+  if (!userId) {
+    res.status(400).json({ error: "userId is required" });
+    return;
+  }
+
+  try {
+    // 사용자 FCM 토큰 가져오기
+    const userDoc = await db.collection("users").doc(userId).get();
+
+    if (!userDoc.exists) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    const userData = userDoc.data();
+    const fcmToken = userData.fcmToken;
+
+    if (!fcmToken) {
+      res.status(400).json({ error: "FCM token not found for user" });
+      return;
+    }
+
+    // 테스트 푸시 알림 전송
+    const notification = {
+      token: fcmToken,
+      notification: {
+        title: title || "테스트 알림",
+        body: body || "푸시 알림이 정상적으로 작동합니다!",
+      },
+      data: {
+        type: "test",
+        timestamp: new Date().toISOString(),
+      },
+      apns: {
+        payload: {
+          aps: {
+            badge: 1,
+            sound: "default",
+          },
+        },
+      },
+    };
+
+    const response = await getMessaging().send(notification);
+    console.log(`Test notification sent to ${userId}: ${response}`);
+
+    res.json({
+      success: true,
+      message: "Test notification sent successfully",
+      messageId: response,
+    });
+  } catch (error) {
+    console.error("Error sending test notification:", error);
+    res.status(500).json({
+      error: "Failed to send notification",
+      details: error.message,
+    });
+  }
+});
+
+// ========================================
 // 2. 신규 사용자 처리
 // ========================================
 exports.onUserCreate = onDocumentCreated("users/{userId}", async (event) => {

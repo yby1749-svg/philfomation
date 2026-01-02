@@ -7,16 +7,37 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject var authViewModel: AuthViewModel
     @StateObject private var themeManager = ThemeManager.shared
     @State private var isSeedingData = false
     @State private var showSeedAlert = false
+    @State private var isSendingTestNotification = false
+    @State private var showNotificationAlert = false
+    @State private var notificationAlertMessage = ""
+    @State private var notificationPermissionStatus = ""
+    @State private var fcmToken = ""
 
     var body: some View {
         NavigationStack {
             List {
                 Section("알림") {
-                    Toggle("푸시 알림", isOn: .constant(true))
-                    Toggle("채팅 알림", isOn: .constant(true))
+                    HStack {
+                        Text("알림 권한")
+                        Spacer()
+                        Text(notificationPermissionStatus)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    if notificationPermissionStatus == "거부됨" {
+                        Button {
+                            if let url = URL(string: UIApplication.openSettingsURLString) {
+                                UIApplication.shared.open(url)
+                            }
+                        } label: {
+                            Text("설정에서 알림 허용하기")
+                                .foregroundStyle(Color(hex: "2563EB"))
+                        }
+                    }
                 }
 
                 Section("화면") {
@@ -139,6 +160,41 @@ struct SettingsView: View {
                         }
                     }
                     .disabled(isSeedingData)
+
+                    Button {
+                        sendTestNotification()
+                    } label: {
+                        HStack {
+                            Text("푸시 알림 테스트")
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            if isSendingTestNotification {
+                                ProgressView()
+                            }
+                        }
+                    }
+                    .disabled(isSendingTestNotification)
+
+                    if !fcmToken.isEmpty {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("FCM Token")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text(fcmToken)
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                                .lineLimit(2)
+                        }
+
+                        Button {
+                            UIPasteboard.general.string = fcmToken
+                            notificationAlertMessage = "FCM 토큰이 클립보드에 복사되었습니다"
+                            showNotificationAlert = true
+                        } label: {
+                            Text("FCM 토큰 복사")
+                                .foregroundStyle(.primary)
+                        }
+                    }
                 }
                 #endif
 
@@ -171,10 +227,76 @@ struct SettingsView: View {
             } message: {
                 Text("샘플 사용자 3명, 게시글 3개, 댓글 3개, 업소 3개가 생성되었습니다.")
             }
+            .alert("알림", isPresented: $showNotificationAlert) {
+                Button("확인") {}
+            } message: {
+                Text(notificationAlertMessage)
+            }
+            .task {
+                await loadNotificationStatus()
+            }
+        }
+    }
+
+    // MARK: - Helper Methods
+
+    private func loadNotificationStatus() async {
+        let status = await PushNotificationService.shared.checkPermissionStatus()
+
+        await MainActor.run {
+            switch status {
+            case .authorized:
+                notificationPermissionStatus = "허용됨"
+            case .denied:
+                notificationPermissionStatus = "거부됨"
+            case .notDetermined:
+                notificationPermissionStatus = "미설정"
+            case .provisional:
+                notificationPermissionStatus = "임시 허용"
+            case .ephemeral:
+                notificationPermissionStatus = "임시"
+            @unknown default:
+                notificationPermissionStatus = "알 수 없음"
+            }
+        }
+
+        // FCM 토큰 가져오기
+        if let token = await PushNotificationService.shared.getCurrentToken() {
+            await MainActor.run {
+                fcmToken = token
+            }
+        }
+    }
+
+    private func sendTestNotification() {
+        guard let userId = authViewModel.currentUser?.id else {
+            notificationAlertMessage = "로그인이 필요합니다"
+            showNotificationAlert = true
+            return
+        }
+
+        isSendingTestNotification = true
+
+        Task {
+            let result = await PushNotificationService.shared.sendTestNotification(userId: userId)
+
+            await MainActor.run {
+                isSendingTestNotification = false
+
+                switch result {
+                case .success(let message):
+                    notificationAlertMessage = "테스트 알림이 전송되었습니다!\n\(message)"
+                case .failure(let error):
+                    notificationAlertMessage = "알림 전송 실패: \(error.localizedDescription)"
+                }
+
+                showNotificationAlert = true
+            }
         }
     }
 }
 
 #Preview {
     SettingsView()
+        .environmentObject(AuthViewModel())
 }

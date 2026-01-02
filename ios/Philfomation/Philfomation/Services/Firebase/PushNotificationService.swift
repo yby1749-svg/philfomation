@@ -91,6 +91,73 @@ class PushNotificationService: NSObject, ObservableObject {
         // The app just needs to create the notification in Firestore
         // and Cloud Function will send the push notification
     }
+
+    // MARK: - Test Notification
+
+    func sendTestNotification(userId: String) async -> Result<String, Error> {
+        // Firebase Functions URL
+        guard let url = URL(string: "https://us-central1-philfomation-232a8.cloudfunctions.net/sendTestNotification") else {
+            return .failure(NSError(domain: "PushNotification", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"]))
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let body: [String: Any] = [
+            "userId": userId,
+            "title": "테스트 알림",
+            "body": "푸시 알림이 정상적으로 작동합니다! 🎉"
+        ]
+
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                return .failure(NSError(domain: "PushNotification", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid response"]))
+            }
+
+            if httpResponse.statusCode == 200 {
+                if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let message = json["message"] as? String {
+                    return .success(message)
+                }
+                return .success("Notification sent")
+            } else {
+                if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let error = json["error"] as? String {
+                    return .failure(NSError(domain: "PushNotification", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: error]))
+                }
+                return .failure(NSError(domain: "PushNotification", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "Request failed"]))
+            }
+        } catch {
+            return .failure(error)
+        }
+    }
+
+    // MARK: - Check Permission Status
+
+    func checkPermissionStatus() async -> UNAuthorizationStatus {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        return settings.authorizationStatus
+    }
+
+    // MARK: - Get Current FCM Token
+
+    func getCurrentToken() async -> String? {
+        do {
+            let token = try await Messaging.messaging().token()
+            await MainActor.run {
+                self.fcmToken = token
+            }
+            return token
+        } catch {
+            print("Error fetching FCM token: \(error)")
+            return nil
+        }
+    }
 }
 
 // MARK: - MessagingDelegate
