@@ -298,9 +298,9 @@ struct PostContentView: View {
     }
 
     private func sharePost() {
-        guard let postId = post.id else { return }
+        guard let postId = post.id,
+              let shareURL = DeepLinkManager.shared.universalShareURL(for: .post(id: postId)) else { return }
 
-        let shareURL = DeepLinkManager.shared.universalShareURL(for: .post(id: postId))
         let text = """
         \(post.title)
 

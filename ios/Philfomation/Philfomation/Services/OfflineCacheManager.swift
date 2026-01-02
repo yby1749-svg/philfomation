@@ -12,7 +12,9 @@ class OfflineCacheManager {
     private let cacheDirectory: URL
 
     private init() {
-        let documentsDirectory = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!
+        guard let documentsDirectory = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            fatalError("Unable to access document directory")
+        }
         cacheDirectory = documentsDirectory.appendingPathComponent("OfflineCache", isDirectory: true)
 
         // Create cache directory if it doesn't exist

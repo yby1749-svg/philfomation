@@ -30,9 +30,14 @@ class ChatViewModel: ObservableObject {
     // MARK: - 1:1 Chat Methods
 
     func fetchChats() async {
-        guard let userId = currentUserId else { return }
+        guard let userId = currentUserId else {
+            errorMessage = "로그인이 필요합니다."
+            return
+        }
 
         isLoading = true
+        errorMessage = nil
+
         do {
             chats = try await FirestoreService.shared.getChats(userId: userId)
         } catch {
@@ -43,7 +48,10 @@ class ChatViewModel: ObservableObject {
     }
 
     func startChat(with userId: String) async -> Chat? {
-        guard let currentUserId = currentUserId else { return nil }
+        guard let currentUserId = currentUserId else {
+            errorMessage = "로그인이 필요합니다."
+            return nil
+        }
 
         do {
             let chat = try await FirestoreService.shared.getOrCreateChat(
@@ -69,17 +77,28 @@ class ChatViewModel: ObservableObject {
     }
 
     func sendMessage(text: String) async {
-        guard let chatId = selectedChat?.id,
-              let userId = currentUserId,
-              let user = try? await FirestoreService.shared.getUser(id: userId) else { return }
+        guard let chatId = selectedChat?.id else {
+            errorMessage = "채팅방을 찾을 수 없습니다."
+            return
+        }
 
-        let message = Message(
-            senderId: userId,
-            senderName: user.name,
-            text: text
-        )
+        guard let userId = currentUserId else {
+            errorMessage = "로그인이 필요합니다."
+            return
+        }
 
         do {
+            guard let user = try await FirestoreService.shared.getUser(id: userId) else {
+                errorMessage = "사용자 정보를 불러올 수 없습니다."
+                return
+            }
+
+            let message = Message(
+                senderId: userId,
+                senderName: user.name,
+                text: text
+            )
+
             try await FirestoreService.shared.sendMessage(chatId: chatId, message: message)
         } catch {
             errorMessage = "메시지 전송에 실패했습니다."
@@ -88,17 +107,28 @@ class ChatViewModel: ObservableObject {
     }
 
     func sendImageMessage(imageUrl: String) async {
-        guard let chatId = selectedChat?.id,
-              let userId = currentUserId,
-              let user = try? await FirestoreService.shared.getUser(id: userId) else { return }
+        guard let chatId = selectedChat?.id else {
+            errorMessage = "채팅방을 찾을 수 없습니다."
+            return
+        }
 
-        let message = Message(
-            senderId: userId,
-            senderName: user.name,
-            imageUrl: imageUrl
-        )
+        guard let userId = currentUserId else {
+            errorMessage = "로그인이 필요합니다."
+            return
+        }
 
         do {
+            guard let user = try await FirestoreService.shared.getUser(id: userId) else {
+                errorMessage = "사용자 정보를 불러올 수 없습니다."
+                return
+            }
+
+            let message = Message(
+                senderId: userId,
+                senderName: user.name,
+                imageUrl: imageUrl
+            )
+
             try await FirestoreService.shared.sendMessage(chatId: chatId, message: message)
         } catch {
             errorMessage = "이미지 전송에 실패했습니다."
@@ -110,6 +140,8 @@ class ChatViewModel: ObservableObject {
 
     func fetchChatRooms() async {
         isLoading = true
+        errorMessage = nil
+
         do {
             chatRooms = try await FirestoreService.shared.getChatRooms(category: selectedRoomCategory)
         } catch {
@@ -120,25 +152,32 @@ class ChatViewModel: ObservableObject {
     }
 
     func createChatRoom(name: String, description: String?, category: ChatRoomCategory) async -> String? {
-        guard let userId = currentUserId,
-              let user = try? await FirestoreService.shared.getUser(id: userId) else { return nil }
-
-        let room = ChatRoom(
-            name: name,
-            description: description,
-            category: category,
-            ownerId: userId,
-            ownerName: user.name
-        )
-
-        let member = ChatRoomMember(
-            userId: userId,
-            userName: user.name,
-            userPhotoURL: user.photoURL,
-            role: .admin
-        )
+        guard let userId = currentUserId else {
+            errorMessage = "로그인이 필요합니다."
+            return nil
+        }
 
         do {
+            guard let user = try await FirestoreService.shared.getUser(id: userId) else {
+                errorMessage = "사용자 정보를 불러올 수 없습니다."
+                return nil
+            }
+
+            let room = ChatRoom(
+                name: name,
+                description: description,
+                category: category,
+                ownerId: userId,
+                ownerName: user.name
+            )
+
+            let member = ChatRoomMember(
+                userId: userId,
+                userName: user.name,
+                userPhotoURL: user.photoURL,
+                role: .admin
+            )
+
             let roomId = try await FirestoreService.shared.createChatRoom(room, creator: member)
             await fetchChatRooms()
             return roomId
@@ -150,16 +189,23 @@ class ChatViewModel: ObservableObject {
     }
 
     func joinChatRoom(roomId: String) async -> Bool {
-        guard let userId = currentUserId,
-              let user = try? await FirestoreService.shared.getUser(id: userId) else { return false }
-
-        let member = ChatRoomMember(
-            userId: userId,
-            userName: user.name,
-            userPhotoURL: user.photoURL
-        )
+        guard let userId = currentUserId else {
+            errorMessage = "로그인이 필요합니다."
+            return false
+        }
 
         do {
+            guard let user = try await FirestoreService.shared.getUser(id: userId) else {
+                errorMessage = "사용자 정보를 불러올 수 없습니다."
+                return false
+            }
+
+            let member = ChatRoomMember(
+                userId: userId,
+                userName: user.name,
+                userPhotoURL: user.photoURL
+            )
+
             try await FirestoreService.shared.joinChatRoom(roomId: roomId, member: member)
             await fetchChatRooms()
             return true
@@ -171,7 +217,10 @@ class ChatViewModel: ObservableObject {
     }
 
     func leaveChatRoom(roomId: String) async -> Bool {
-        guard let userId = currentUserId else { return false }
+        guard let userId = currentUserId else {
+            errorMessage = "로그인이 필요합니다."
+            return false
+        }
 
         do {
             try await FirestoreService.shared.leaveChatRoom(roomId: roomId, userId: userId)
@@ -188,13 +237,20 @@ class ChatViewModel: ObservableObject {
         do {
             roomMembers = try await FirestoreService.shared.getChatRoomMembers(roomId: roomId)
         } catch {
+            errorMessage = "멤버 목록을 불러오는데 실패했습니다."
             print("Error fetching room members: \(error)")
         }
     }
 
     func isUserMember(roomId: String) async -> Bool {
         guard let userId = currentUserId else { return false }
-        return (try? await FirestoreService.shared.isUserMemberOfRoom(roomId: roomId, userId: userId)) ?? false
+
+        do {
+            return try await FirestoreService.shared.isUserMemberOfRoom(roomId: roomId, userId: userId)
+        } catch {
+            print("Error checking membership: \(error)")
+            return false
+        }
     }
 
     func listenToRoomMessages(roomId: String) {
@@ -207,17 +263,28 @@ class ChatViewModel: ObservableObject {
     }
 
     func sendRoomMessage(text: String) async {
-        guard let roomId = selectedChatRoom?.id,
-              let userId = currentUserId,
-              let user = try? await FirestoreService.shared.getUser(id: userId) else { return }
+        guard let roomId = selectedChatRoom?.id else {
+            errorMessage = "단톡방을 찾을 수 없습니다."
+            return
+        }
 
-        let message = Message(
-            senderId: userId,
-            senderName: user.name,
-            text: text
-        )
+        guard let userId = currentUserId else {
+            errorMessage = "로그인이 필요합니다."
+            return
+        }
 
         do {
+            guard let user = try await FirestoreService.shared.getUser(id: userId) else {
+                errorMessage = "사용자 정보를 불러올 수 없습니다."
+                return
+            }
+
+            let message = Message(
+                senderId: userId,
+                senderName: user.name,
+                text: text
+            )
+
             try await FirestoreService.shared.sendRoomMessage(roomId: roomId, message: message)
         } catch {
             errorMessage = "메시지 전송에 실패했습니다."
@@ -230,6 +297,12 @@ class ChatViewModel: ObservableObject {
         Task {
             await fetchChatRooms()
         }
+    }
+
+    // MARK: - Error Handling
+
+    func clearError() {
+        errorMessage = nil
     }
 
     // MARK: - Cleanup

@@ -26,52 +26,22 @@ struct EditPostView: View {
         _selectedCategory = State(initialValue: post.category)
     }
 
+    private var validation: PostValidation {
+        PostValidation(title: title, content: content)
+    }
+
+    private var hasChanges: Bool {
+        title != post.title ||
+        content != post.content ||
+        selectedCategory != post.category
+    }
+
     var body: some View {
         NavigationStack {
             Form {
-                // Category Selection
-                Section {
-                    Picker("카테고리", selection: $selectedCategory) {
-                        ForEach(PostCategory.allCases) { category in
-                            HStack {
-                                Image(systemName: category.icon)
-                                    .foregroundStyle(Color(hex: category.color))
-                                Text(category.rawValue)
-                            }
-                            .tag(category)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                } header: {
-                    Text("카테고리 선택")
-                }
-
-                // Title
-                Section {
-                    TextField("제목을 입력하세요", text: $title)
-                        .textInputAutocapitalization(.never)
-                } header: {
-                    Text("제목")
-                } footer: {
-                    if title.count > 100 {
-                        Text("제목은 100자 이내로 작성해주세요")
-                            .foregroundStyle(.red)
-                    }
-                }
-
-                // Content
-                Section {
-                    TextEditor(text: $content)
-                        .frame(minHeight: 200)
-                } header: {
-                    Text("내용")
-                } footer: {
-                    HStack {
-                        Spacer()
-                        Text("\(content.count)자")
-                            .foregroundStyle(content.count > 5000 ? .red : .secondary)
-                    }
-                }
+                PostCategoryPickerSection(selectedCategory: $selectedCategory)
+                PostTitleSection(title: $title)
+                PostContentSection(content: $content)
 
                 // Existing Images (read-only display)
                 if let imageURLs = post.imageURLs, !imageURLs.isEmpty {
@@ -99,18 +69,11 @@ struct EditPostView: View {
                             await updatePost()
                         }
                     }
-                    .disabled(!isValidPost || isSubmitting || !hasChanges)
+                    .disabled(!validation.isValid || isSubmitting || !hasChanges)
                 }
             }
             .overlay {
-                if isSubmitting {
-                    Color.black.opacity(0.3)
-                        .ignoresSafeArea()
-                    ProgressView("저장 중...")
-                        .padding()
-                        .background(Color(.systemBackground))
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                }
+                SubmittingOverlay(isSubmitting: isSubmitting, message: "저장 중...")
             }
             .alert("알림", isPresented: $showAlert) {
                 Button("확인", role: .cancel) {}
@@ -120,25 +83,12 @@ struct EditPostView: View {
         }
     }
 
-    private var isValidPost: Bool {
-        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        title.count <= 100 &&
-        content.count <= 5000
-    }
-
-    private var hasChanges: Bool {
-        title != post.title ||
-        content != post.content ||
-        selectedCategory != post.category
-    }
-
     private func updatePost() async {
         isSubmitting = true
 
         let success = await viewModel.updatePost(
-            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
-            content: content.trimmingCharacters(in: .whitespacesAndNewlines),
+            title: validation.trimmedTitle,
+            content: validation.trimmedContent,
             category: selectedCategory
         )
 

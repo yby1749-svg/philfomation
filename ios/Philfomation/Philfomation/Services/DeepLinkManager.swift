@@ -134,16 +134,16 @@ class DeepLinkManager: ObservableObject {
 
     // MARK: - Generate Share URLs
 
-    func shareURL(for destination: DeepLinkDestination) -> URL {
+    func shareURL(for destination: DeepLinkDestination) -> URL? {
         // Use URL scheme for sharing (works within app ecosystem)
         let urlString = "\(urlScheme)://\(destination.path)"
-        return URL(string: urlString)!
+        return URL(string: urlString)
     }
 
-    func universalShareURL(for destination: DeepLinkDestination) -> URL {
+    func universalShareURL(for destination: DeepLinkDestination) -> URL? {
         // Use universal link for sharing (works on web and app)
         let urlString = "https://\(universalLinkHost)/app/\(destination.path)"
-        return URL(string: urlString)!
+        return URL(string: urlString)
     }
 
     // MARK: - Clear Destination

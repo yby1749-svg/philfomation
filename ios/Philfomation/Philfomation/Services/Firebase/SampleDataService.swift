@@ -19,6 +19,9 @@ class SampleDataService {
         print("Starting to seed sample data...")
 
         do {
+            // Clear existing sample data first
+            await clearSampleData()
+
             // Create sample users first
             let userIds = try await seedSampleUsers()
 
@@ -35,6 +38,47 @@ class SampleDataService {
         } catch {
             print("Error seeding sample data: \(error)")
         }
+    }
+
+    // MARK: - Clear Sample Data
+
+    private func clearSampleData() async {
+        print("Clearing existing sample data...")
+
+        // Delete ALL posts (to remove duplicates)
+        do {
+            let postsSnapshot = try await db.collection("posts").getDocuments()
+            for doc in postsSnapshot.documents {
+                try? await doc.reference.delete()
+            }
+            print("✓ Deleted \(postsSnapshot.documents.count) posts")
+        } catch {
+            print("Error deleting posts: \(error)")
+        }
+
+        // Delete ALL businesses (to remove duplicates)
+        do {
+            let businessesSnapshot = try await db.collection("businesses").getDocuments()
+            for doc in businessesSnapshot.documents {
+                try? await doc.reference.delete()
+            }
+            print("✓ Deleted \(businessesSnapshot.documents.count) businesses")
+        } catch {
+            print("Error deleting businesses: \(error)")
+        }
+
+        // Delete ALL comments (to remove duplicates)
+        do {
+            let commentsSnapshot = try await db.collection("comments").getDocuments()
+            for doc in commentsSnapshot.documents {
+                try? await doc.reference.delete()
+            }
+            print("✓ Deleted \(commentsSnapshot.documents.count) comments")
+        } catch {
+            print("Error deleting comments: \(error)")
+        }
+
+        print("✓ All existing data cleared")
     }
 
     // MARK: - Sample Users
@@ -77,8 +121,8 @@ class SampleDataService {
     // MARK: - Sample Posts
 
     private func seedSamplePosts(authorIds: [String]) async throws -> [String] {
-        let posts = [
-            Post(
+        let posts: [(id: String, post: Post)] = [
+            ("sample_post_1", Post(
                 authorId: authorIds[0],
                 authorName: "김민준",
                 category: .qna,
@@ -94,8 +138,8 @@ class SampleDataService {
                 viewCount: 156,
                 createdAt: Date().addingTimeInterval(-86400), // 1 day ago
                 updatedAt: nil
-            ),
-            Post(
+            )),
+            ("sample_post_2", Post(
                 authorId: authorIds[1],
                 authorName: "이서연",
                 category: .experience,
@@ -114,8 +158,8 @@ class SampleDataService {
                 viewCount: 523,
                 createdAt: Date().addingTimeInterval(-172800), // 2 days ago
                 updatedAt: nil
-            ),
-            Post(
+            )),
+            ("sample_post_3", Post(
                 authorId: authorIds[2],
                 authorName: "박지훈",
                 category: .tip,
@@ -136,14 +180,14 @@ class SampleDataService {
                 viewCount: 1024,
                 createdAt: Date().addingTimeInterval(-259200), // 3 days ago
                 updatedAt: nil
-            )
+            ))
         ]
 
         var postIds: [String] = []
 
-        for post in posts {
-            let ref = try db.collection("posts").addDocument(from: post)
-            postIds.append(ref.documentID)
+        for (id, post) in posts {
+            try db.collection("posts").document(id).setData(from: post)
+            postIds.append(id)
         }
 
         print("✓ 3 sample posts created")
@@ -153,9 +197,8 @@ class SampleDataService {
     // MARK: - Sample Comments
 
     private func seedSampleComments(postIds: [String], authorIds: [String]) async throws {
-        // Comments for first post (환전소 추천)
-        let comments = [
-            Comment(
+        let comments: [(id: String, comment: Comment)] = [
+            ("sample_comment_1", Comment(
                 postId: postIds[0],
                 authorId: authorIds[1],
                 authorName: "이서연",
@@ -163,8 +206,8 @@ class SampleDataService {
                 likeCount: 5,
                 createdAt: Date().addingTimeInterval(-43200),
                 updatedAt: nil
-            ),
-            Comment(
+            )),
+            ("sample_comment_2", Comment(
                 postId: postIds[0],
                 authorId: authorIds[2],
                 authorName: "박지훈",
@@ -172,8 +215,8 @@ class SampleDataService {
                 likeCount: 3,
                 createdAt: Date().addingTimeInterval(-21600),
                 updatedAt: nil
-            ),
-            Comment(
+            )),
+            ("sample_comment_3", Comment(
                 postId: postIds[1],
                 authorId: authorIds[0],
                 authorName: "김민준",
@@ -181,11 +224,11 @@ class SampleDataService {
                 likeCount: 2,
                 createdAt: Date().addingTimeInterval(-86400),
                 updatedAt: nil
-            )
+            ))
         ]
 
-        for comment in comments {
-            _ = try db.collection("comments").addDocument(from: comment)
+        for (id, comment) in comments {
+            try db.collection("comments").document(id).setData(from: comment)
         }
 
         print("✓ 3 sample comments created")
@@ -194,8 +237,8 @@ class SampleDataService {
     // MARK: - Sample Businesses
 
     private func seedSampleBusinesses() async throws {
-        let businesses = [
-            Business(
+        let businesses: [(id: String, business: Business)] = [
+            ("sample_business_1", Business(
                 name: "한식당 서울",
                 category: .restaurant,
                 description: "마카티 중심부에 위치한 정통 한식당입니다. 삼겹살, 불고기, 김치찌개 등 다양한 한식 메뉴를 제공합니다.",
@@ -207,8 +250,8 @@ class SampleDataService {
                 latitude: 14.5547,
                 longitude: 121.0244,
                 openingHours: "월-토: 11:00-22:00, 일: 12:00-21:00"
-            ),
-            Business(
+            )),
+            ("sample_business_2", Business(
                 name: "K-마트",
                 category: .mart,
                 description: "한국 식품, 과자, 라면, 화장품 등 다양한 한국 제품을 판매하는 마트입니다.",
@@ -220,8 +263,8 @@ class SampleDataService {
                 latitude: 14.5505,
                 longitude: 121.0455,
                 openingHours: "매일: 09:00-21:00"
-            ),
-            Business(
+            )),
+            ("sample_business_3", Business(
                 name: "코리안 헤어샵",
                 category: .salon,
                 description: "한국 스타일 헤어컷과 펌, 염색 전문 미용실입니다. 한국어 상담 가능합니다.",
@@ -233,11 +276,11 @@ class SampleDataService {
                 latitude: 14.5873,
                 longitude: 121.0615,
                 openingHours: "화-일: 10:00-20:00, 월요일 휴무"
-            )
+            ))
         ]
 
-        for business in businesses {
-            _ = try db.collection("businesses").addDocument(from: business)
+        for (id, business) in businesses {
+            try db.collection("businesses").document(id).setData(from: business)
         }
 
         print("✓ 3 sample businesses created")

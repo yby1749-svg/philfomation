@@ -121,9 +121,9 @@ struct BusinessDetailView: View {
     }
 
     private func shareBusiness() {
-        guard let businessId = business.id else { return }
+        guard let businessId = business.id,
+              let shareURL = DeepLinkManager.shared.universalShareURL(for: .business(id: businessId)) else { return }
 
-        let shareURL = DeepLinkManager.shared.universalShareURL(for: .business(id: businessId))
         let text = """
         \(business.name)
         \(business.category.rawValue) | \(business.address)

@@ -26,7 +26,9 @@ class ExchangeRateService {
         }
 
         // 2. API 호출
-        let url = URL(string: "\(baseURL)/\(base.rawValue)")!
+        guard let url = URL(string: "\(baseURL)/\(base.rawValue)") else {
+            throw ExchangeRateError.invalidResponse
+        }
 
         let (data, response) = try await URLSession.shared.data(from: url)
 

@@ -20,7 +20,7 @@ struct BusinessMapView: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             Map(coordinateRegion: $region, showsUserLocation: true, annotationItems: businessesWithCoordinates) { business in
-                MapAnnotation(coordinate: business.coordinate!) {
+                MapAnnotation(coordinate: business.coordinate ?? CLLocationCoordinate2D(latitude: 0, longitude: 0)) {
                     Button {
                         selectedBusiness = business
                     } label: {
