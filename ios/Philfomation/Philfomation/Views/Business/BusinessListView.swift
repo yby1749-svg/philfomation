@@ -97,6 +97,24 @@ struct BusinessListView: View {
                                         BusinessCard(business: business)
                                     }
                                     .buttonStyle(.plain)
+                                    .onAppear {
+                                        // Load more when approaching the end
+                                        if business.id == viewModel.filteredBusinesses.last?.id {
+                                            Task {
+                                                await viewModel.loadMoreBusinesses()
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // Loading more indicator
+                                if viewModel.isLoadingMore {
+                                    HStack {
+                                        Spacer()
+                                        ProgressView()
+                                            .padding()
+                                        Spacer()
+                                    }
                                 }
                             }
                             .padding()

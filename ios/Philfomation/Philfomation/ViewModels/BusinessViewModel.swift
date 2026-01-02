@@ -5,6 +5,7 @@
 
 import Foundation
 import Combine
+import FirebaseFirestore
 
 @MainActor
 class BusinessViewModel: ObservableObject {
@@ -14,13 +15,17 @@ class BusinessViewModel: ObservableObject {
     @Published var selectedCategory: BusinessCategory?
     @Published var searchQuery = ""
     @Published var isLoading = false
+    @Published var isLoadingMore = false
     @Published var errorMessage: String?
     @Published var isOfflineMode = false
+    @Published var hasMoreData = true
 
     // MARK: - Private Properties
     private var blockedUserIds: Set<String> = []
     private let cacheManager = OfflineCacheManager.shared
     private let networkMonitor = NetworkMonitor.shared
+    private var lastDocument: DocumentSnapshot?
+    private let pageSize = 20
 
     init() {
         Task {
@@ -32,6 +37,8 @@ class BusinessViewModel: ObservableObject {
         isLoading = true
         errorMessage = nil
         isOfflineMode = false
+        lastDocument = nil
+        hasMoreData = true
 
         // Check network connectivity
         if !networkMonitor.isConnected {
@@ -40,6 +47,7 @@ class BusinessViewModel: ObservableObject {
                 businesses = cachedBusinesses
                 isOfflineMode = true
                 errorMessage = nil
+                hasMoreData = false
             } else {
                 errorMessage = "오프라인 상태입니다. 캐시된 데이터가 없습니다."
             }
@@ -48,9 +56,20 @@ class BusinessViewModel: ObservableObject {
         }
 
         do {
-            businesses = try await FirestoreService.shared.getBusinesses(category: selectedCategory)
+            let result = try await FirestoreService.shared.getBusinessesPaginated(
+                category: selectedCategory,
+                limit: pageSize,
+                lastDocument: nil
+            )
+            businesses = result.businesses
+            lastDocument = result.lastDocument
+            hasMoreData = result.businesses.count == pageSize
+
             // Save to cache for offline use
             cacheManager.saveBusinesses(businesses)
+
+            // Prefetch images
+            prefetchImages()
         } catch {
             // Try to load from cache on error
             if let cachedBusinesses = cacheManager.loadBusinesses() {
@@ -63,6 +82,40 @@ class BusinessViewModel: ObservableObject {
         }
 
         isLoading = false
+    }
+
+    func loadMoreBusinesses() async {
+        guard !isLoadingMore, hasMoreData, !isOfflineMode else { return }
+
+        isLoadingMore = true
+
+        do {
+            let result = try await FirestoreService.shared.getBusinessesPaginated(
+                category: selectedCategory,
+                limit: pageSize,
+                lastDocument: lastDocument
+            )
+
+            businesses.append(contentsOf: result.businesses)
+            lastDocument = result.lastDocument
+            hasMoreData = result.businesses.count == pageSize
+
+            // Prefetch images for new items
+            prefetchImages(for: result.businesses)
+        } catch {
+            print("Error loading more businesses: \(error)")
+        }
+
+        isLoadingMore = false
+    }
+
+    private func prefetchImages() {
+        prefetchImages(for: businesses)
+    }
+
+    private func prefetchImages(for items: [Business]) {
+        let urls = items.compactMap { $0.photos.first }
+        ImageCacheManager.shared.prefetchImages(urls: urls)
     }
 
     func searchBusinesses() async {

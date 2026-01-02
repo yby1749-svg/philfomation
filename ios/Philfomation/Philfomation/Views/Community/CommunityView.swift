@@ -54,9 +54,27 @@ struct CommunityView: View {
                                     PostRowView(post: post)
                                 }
                                 .buttonStyle(.plain)
+                                .onAppear {
+                                    // Load more when approaching the end
+                                    if post.id == viewModel.filteredPosts.last?.id {
+                                        Task {
+                                            await viewModel.loadMorePosts()
+                                        }
+                                    }
+                                }
 
                                 Divider()
                                     .padding(.leading, 16)
+                            }
+
+                            // Loading more indicator
+                            if viewModel.isLoadingMore {
+                                HStack {
+                                    Spacer()
+                                    ProgressView()
+                                        .padding()
+                                    Spacer()
+                                }
                             }
                         }
                     }

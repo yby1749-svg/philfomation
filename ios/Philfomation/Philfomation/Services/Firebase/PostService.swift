@@ -38,6 +38,39 @@ class PostService {
         return snapshot.documents.compactMap { try? $0.data(as: Post.self) }
     }
 
+    // Paginated version
+    func fetchPostsPaginated(
+        category: PostCategory? = nil,
+        sortBy: PostSortOption = .latest,
+        limit: Int = 20,
+        lastDocument: DocumentSnapshot? = nil
+    ) async throws -> (posts: [Post], lastDocument: DocumentSnapshot?) {
+        let orderField = sortBy == .latest ? "createdAt" : "likeCount"
+
+        var query: Query
+
+        if let category = category {
+            query = db.collection(postsCollection)
+                .whereField("category", isEqualTo: category.rawValue)
+                .order(by: orderField, descending: true)
+                .limit(to: limit)
+        } else {
+            query = db.collection(postsCollection)
+                .order(by: orderField, descending: true)
+                .limit(to: limit)
+        }
+
+        if let lastDoc = lastDocument {
+            query = query.start(afterDocument: lastDoc)
+        }
+
+        let snapshot = try await query.getDocuments()
+        let posts = snapshot.documents.compactMap { try? $0.data(as: Post.self) }
+        let lastDoc = snapshot.documents.last
+
+        return (posts, lastDoc)
+    }
+
     func fetchPost(id: String) async throws -> Post? {
         let document = try await db.collection(postsCollection).document(id).getDocument()
         return try? document.data(as: Post.self)

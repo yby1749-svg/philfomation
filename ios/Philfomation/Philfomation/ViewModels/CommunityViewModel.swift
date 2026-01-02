@@ -7,6 +7,7 @@ import Foundation
 import SwiftUI
 import Combine
 import UIKit
+import FirebaseFirestore
 
 // MARK: - Post Sort Option
 enum PostSortOption: String, CaseIterable, Identifiable {
@@ -24,14 +25,18 @@ class CommunityViewModel: ObservableObject {
     @Published var selectedSort: PostSortOption = .latest
     @Published var searchQuery: String = ""
     @Published var isLoading = false
+    @Published var isLoadingMore = false
     @Published var errorMessage: String?
     @Published var isOfflineMode = false
+    @Published var hasMoreData = true
 
     // MARK: - Private Properties
     private let service = PostService.shared
     private var blockedUserIds: Set<String> = []
     private let cacheManager = OfflineCacheManager.shared
     private let networkMonitor = NetworkMonitor.shared
+    private var lastDocument: DocumentSnapshot?
+    private let pageSize = 20
 
     // MARK: - Computed Properties
     var filteredPosts: [Post] {
@@ -75,6 +80,8 @@ class CommunityViewModel: ObservableObject {
         isLoading = true
         errorMessage = nil
         isOfflineMode = false
+        lastDocument = nil
+        hasMoreData = true
 
         // Check network connectivity
         if !networkMonitor.isConnected {
@@ -83,6 +90,7 @@ class CommunityViewModel: ObservableObject {
                 posts = cachedPosts
                 isOfflineMode = true
                 errorMessage = nil
+                hasMoreData = false
             } else {
                 errorMessage = "오프라인 상태입니다. 캐시된 데이터가 없습니다."
             }
@@ -91,7 +99,16 @@ class CommunityViewModel: ObservableObject {
         }
 
         do {
-            posts = try await service.fetchPosts(category: selectedCategory, sortBy: selectedSort)
+            let result = try await service.fetchPostsPaginated(
+                category: selectedCategory,
+                sortBy: selectedSort,
+                limit: pageSize,
+                lastDocument: nil
+            )
+            posts = result.posts
+            lastDocument = result.lastDocument
+            hasMoreData = result.posts.count == pageSize
+
             // Save to cache for offline use
             cacheManager.savePosts(posts)
             // Save popular posts to widget
@@ -107,6 +124,29 @@ class CommunityViewModel: ObservableObject {
         }
 
         isLoading = false
+    }
+
+    func loadMorePosts() async {
+        guard !isLoadingMore, hasMoreData, !isOfflineMode else { return }
+
+        isLoadingMore = true
+
+        do {
+            let result = try await service.fetchPostsPaginated(
+                category: selectedCategory,
+                sortBy: selectedSort,
+                limit: pageSize,
+                lastDocument: lastDocument
+            )
+
+            posts.append(contentsOf: result.posts)
+            lastDocument = result.lastDocument
+            hasMoreData = result.posts.count == pageSize
+        } catch {
+            print("Error loading more posts: \(error)")
+        }
+
+        isLoadingMore = false
     }
 
     func setCategory(_ category: PostCategory?) {

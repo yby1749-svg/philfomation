@@ -44,6 +44,31 @@ class FirestoreService {
         return snapshot.documents.compactMap { try? $0.data(as: Business.self) }
     }
 
+    // Paginated version
+    func getBusinessesPaginated(
+        category: BusinessCategory? = nil,
+        limit: Int = 20,
+        lastDocument: DocumentSnapshot? = nil
+    ) async throws -> (businesses: [Business], lastDocument: DocumentSnapshot?) {
+        var query: Query = db.collection("businesses")
+
+        if let category = category {
+            query = query.whereField("category", isEqualTo: category.rawValue)
+        }
+
+        query = query.order(by: "rating", descending: true).limit(to: limit)
+
+        if let lastDoc = lastDocument {
+            query = query.start(afterDocument: lastDoc)
+        }
+
+        let snapshot = try await query.getDocuments()
+        let businesses = snapshot.documents.compactMap { try? $0.data(as: Business.self) }
+        let lastDoc = snapshot.documents.last
+
+        return (businesses, lastDoc)
+    }
+
     func getBusiness(id: String) async throws -> Business? {
         let doc = try await db.collection("businesses").document(id).getDocument()
         return try doc.data(as: Business.self)
