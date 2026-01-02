@@ -13,6 +13,7 @@ struct ProfileView: View {
     @State private var showMyReviews = false
     @State private var showBookmarks = false
     @State private var showSettings = false
+    @State private var showStatsDashboard = false
 
     var body: some View {
         NavigationStack {
@@ -70,6 +71,12 @@ struct ProfileView: View {
 
                 Section {
                     Button {
+                        showStatsDashboard = true
+                    } label: {
+                        ProfileMenuItem(icon: "chart.bar.fill", title: "통계 대시보드", color: .purple)
+                    }
+
+                    Button {
                         showSettings = true
                     } label: {
                         ProfileMenuItem(icon: "gearshape.fill", title: "설정", color: .gray)
@@ -102,6 +109,9 @@ struct ProfileView: View {
             }
             .sheet(isPresented: $showSettings) {
                 SettingsView()
+            }
+            .sheet(isPresented: $showStatsDashboard) {
+                StatsDashboardView()
             }
         }
     }

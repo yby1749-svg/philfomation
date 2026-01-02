@@ -27,6 +27,18 @@ enum BusinessCategory: String, Codable, CaseIterable {
         case .other: return "building.2.fill"
         }
     }
+
+    var color: String {
+        switch self {
+        case .restaurant: return "F97316"
+        case .massage: return "EC4899"
+        case .salon: return "8B5CF6"
+        case .karaoke: return "EF4444"
+        case .mart: return "22C55E"
+        case .travel: return "3B82F6"
+        case .other: return "6B7280"
+        }
+    }
 }
 
 struct Business: Identifiable, Codable {
