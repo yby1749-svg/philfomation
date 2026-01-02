@@ -78,9 +78,15 @@ struct BusinessListView: View {
                 if viewMode == .list {
                     // Business List
                     if viewModel.isLoading {
-                        Spacer()
-                        ProgressView()
-                        Spacer()
+                        ScrollView {
+                            LazyVStack(spacing: 12) {
+                                ForEach(0..<5, id: \.self) { index in
+                                    BusinessCardSkeleton()
+                                        .staggeredAnimation(index: index)
+                                }
+                            }
+                            .padding()
+                        }
                     } else if viewModel.filteredBusinesses.isEmpty {
                         Spacer()
                         EmptyStateView(
@@ -226,7 +232,10 @@ struct CategoryChip: View {
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
+        Button {
+            HapticManager.shared.selectionChanged()
+            action()
+        } label: {
             HStack(spacing: 4) {
                 if let icon = icon {
                     Image(systemName: icon)
@@ -240,7 +249,9 @@ struct CategoryChip: View {
             .background(isSelected ? Color(hex: "2563EB") : Color(.systemGray6))
             .foregroundStyle(isSelected ? .white : .primary)
             .clipShape(Capsule())
+            .animation(.quickSpring, value: isSelected)
         }
+        .buttonStyle(.scale)
     }
 }
 

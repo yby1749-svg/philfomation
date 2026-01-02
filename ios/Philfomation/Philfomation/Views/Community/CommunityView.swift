@@ -39,9 +39,16 @@ struct CommunityView: View {
 
                 // Post List
                 if viewModel.isLoading {
-                    Spacer()
-                    ProgressView()
-                    Spacer()
+                    ScrollView {
+                        LazyVStack(spacing: 0) {
+                            ForEach(0..<5, id: \.self) { index in
+                                PostRowSkeleton()
+                                    .staggeredAnimation(index: index)
+                                Divider()
+                                    .padding(.leading, 16)
+                            }
+                        }
+                    }
                 } else if viewModel.filteredPosts.isEmpty {
                     Spacer()
                     EmptyPostsView()
@@ -164,7 +171,10 @@ struct FilterChipButton: View {
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
+        Button {
+            HapticManager.shared.selectionChanged()
+            action()
+        } label: {
             HStack(spacing: 4) {
                 if let icon = icon {
                     Image(systemName: icon)
@@ -179,8 +189,9 @@ struct FilterChipButton: View {
             .background(isSelected ? color : Color(.systemGray5))
             .foregroundColor(isSelected ? .white : .primary)
             .clipShape(Capsule())
+            .animation(.quickSpring, value: isSelected)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.scale)
     }
 }
 
