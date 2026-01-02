@@ -1,0 +1,177 @@
+//
+//  PushNotificationService.swift
+//  Philfomation
+//
+
+import Foundation
+import Combine
+import FirebaseMessaging
+import FirebaseFirestore
+import UserNotifications
+import UIKit
+
+class PushNotificationService: NSObject, ObservableObject {
+    static let shared = PushNotificationService()
+
+    @Published var fcmToken: String?
+    @Published var isPermissionGranted = false
+
+    private let db = Firestore.firestore()
+
+    private override init() {
+        super.init()
+    }
+
+    // MARK: - Setup
+
+    func setup() {
+        Messaging.messaging().delegate = self
+        UNUserNotificationCenter.current().delegate = self
+    }
+
+    // MARK: - Request Permission
+
+    func requestPermission() async -> Bool {
+        do {
+            let options: UNAuthorizationOptions = [.alert, .badge, .sound]
+            let granted = try await UNUserNotificationCenter.current().requestAuthorization(options: options)
+
+            await MainActor.run {
+                isPermissionGranted = granted
+            }
+
+            if granted {
+                await MainActor.run {
+                    UIApplication.shared.registerForRemoteNotifications()
+                }
+            }
+
+            return granted
+        } catch {
+            print("Error requesting notification permission: \(error)")
+            return false
+        }
+    }
+
+    // MARK: - Token Management
+
+    func saveFCMToken(userId: String) async {
+        guard let token = fcmToken else { return }
+
+        do {
+            try await db.collection("users").document(userId).updateData([
+                "fcmToken": token
+            ])
+            print("FCM token saved for user: \(userId)")
+        } catch {
+            print("Error saving FCM token: \(error)")
+        }
+    }
+
+    func removeFCMToken(userId: String) async {
+        do {
+            try await db.collection("users").document(userId).updateData([
+                "fcmToken": FieldValue.delete()
+            ])
+            print("FCM token removed for user: \(userId)")
+        } catch {
+            print("Error removing FCM token: \(error)")
+        }
+    }
+
+    // MARK: - Send Notification (via Cloud Function)
+
+    func sendPushNotification(
+        to userId: String,
+        title: String,
+        body: String,
+        data: [String: String]? = nil
+    ) async {
+        // This will be handled by Cloud Functions
+        // The app just needs to create the notification in Firestore
+        // and Cloud Function will send the push notification
+    }
+}
+
+// MARK: - MessagingDelegate
+extension PushNotificationService: MessagingDelegate {
+    func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
+        print("FCM Token: \(fcmToken ?? "nil")")
+
+        Task { @MainActor in
+            self.fcmToken = fcmToken
+        }
+
+        // If user is logged in, save the token
+        if let userId = AuthService.shared.currentUserId, let token = fcmToken {
+            Task {
+                await saveFCMToken(userId: userId)
+            }
+        }
+    }
+}
+
+// MARK: - UNUserNotificationCenterDelegate
+extension PushNotificationService: UNUserNotificationCenterDelegate {
+    // Handle foreground notifications
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        let userInfo = notification.request.content.userInfo
+        print("Received notification in foreground: \(userInfo)")
+
+        // Show banner and play sound even when app is in foreground
+        completionHandler([.banner, .sound, .badge])
+    }
+
+    // Handle notification tap
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        let userInfo = response.notification.request.content.userInfo
+        print("User tapped notification: \(userInfo)")
+
+        // Handle deep linking based on notification data
+        handleNotificationTap(userInfo: userInfo)
+
+        completionHandler()
+    }
+
+    private func handleNotificationTap(userInfo: [AnyHashable: Any]) {
+        // Extract notification type and related IDs
+        guard let type = userInfo["type"] as? String else { return }
+
+        switch type {
+        case "comment", "like":
+            if let postId = userInfo["postId"] as? String {
+                // Navigate to post detail
+                NotificationCenter.default.post(
+                    name: .navigateToPost,
+                    object: nil,
+                    userInfo: ["postId": postId]
+                )
+            }
+        case "chat":
+            if let chatId = userInfo["chatId"] as? String {
+                // Navigate to chat
+                NotificationCenter.default.post(
+                    name: .navigateToChat,
+                    object: nil,
+                    userInfo: ["chatId": chatId]
+                )
+            }
+        default:
+            break
+        }
+    }
+}
+
+// MARK: - Notification Names
+extension Notification.Name {
+    static let navigateToPost = Notification.Name("navigateToPost")
+    static let navigateToChat = Notification.Name("navigateToChat")
+}
