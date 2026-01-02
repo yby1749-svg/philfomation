@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="512" height="512" fill="#2563EB" rx="80"/>
+  
+  <!-- Main Symbol: Connected Nodes (Philippines islands + Network) -->
+  <!-- Center large node -->
+  <circle cx="256" cy="256" r="60" fill="#FFFFFF" opacity="0.95"/>
+  
+  <!-- Surrounding nodes (representing connection/formation) -->
+  <!-- Top -->
+  <circle cx="256" cy="140" r="35" fill="#F59E0B" opacity="0.9"/>
+  <line x1="256" y1="196" x2="256" y2="175" stroke="#FFFFFF" stroke-width="8" opacity="0.7"/>
+  
+  <!-- Top Right -->
+  <circle cx="350" cy="190" r="30" fill="#10B981" opacity="0.9"/>
+  <line x1="305" y1="228" x2="328" y2="208" stroke="#FFFFFF" stroke-width="6" opacity="0.6"/>
+  
+  <!-- Right -->
+  <circle cx="380" cy="280" r="28" fill="#F59E0B" opacity="0.85"/>
+  <line x1="316" y1="268" x2="352" y2="277" stroke="#FFFFFF" stroke-width="6" opacity="0.6"/>
+  
+  <!-- Bottom Right -->
+  <circle cx="340" cy="360" r="32" fill="#10B981" opacity="0.9"/>
+  <line x1="298" y1="300" x2="318" y2="338" stroke="#FFFFFF" stroke-width="7" opacity="0.6"/>
+  
+  <!-- Bottom -->
+  <circle cx="256" cy="390" r="30" fill="#FFFFFF" opacity="0.85"/>
+  <line x1="256" y1="316" x2="256" y2="360" stroke="#FFFFFF" stroke-width="7" opacity="0.7"/>
+  
+  <!-- Bottom Left -->
+  <circle cx="170" cy="350" r="28" fill="#F59E0B" opacity="0.9"/>
+  <line x1="212" y1="298" x2="188" y2="330" stroke="#FFFFFF" stroke-width="6" opacity="0.6"/>
+  
+  <!-- Left -->
+  <circle cx="135" cy="270" r="30" fill="#10B981" opacity="0.9"/>
+  <line x1="196" y1="262" x2="165" y2="268" stroke="#FFFFFF" stroke-width="7" opacity="0.6"/>
+  
+  <!-- Top Left -->
+  <circle cx="175" cy="195" r="32" fill="#FFFFFF" opacity="0.85"/>
+  <line x1="215" y1="224" x2="195" y2="215" stroke="#FFFFFF" stroke-width="7" opacity="0.6"/>
+  
+  <!-- Inner accent: "i" for information -->
+  <circle cx="256" cy="236" r="8" fill="#2563EB"/>
+  <rect x="252" y="250" width="8" height="30" fill="#2563EB" rx="4"/>
+</svg>

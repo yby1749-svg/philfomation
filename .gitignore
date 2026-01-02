@@ -1,0 +1,29 @@
+# Node
+node_modules/
+npm-debug.log
+
+# Firebase
+.firebase/
+firebase-debug.log
+
+# iOS
+ios/**/xcuserdata/
+ios/**/*.xcworkspace/xcuserdata/
+ios/**/DerivedData/
+ios/**/.build/
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# macOS
+.DS_Store
+*.swp
+*~
+
+# IDE
+.idea/
+.vscode/
+
+# Environment
+.env
+.env.local
