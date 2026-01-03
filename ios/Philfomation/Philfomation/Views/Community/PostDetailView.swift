@@ -15,6 +15,8 @@ struct PostDetailView: View {
     @State private var showDeleteAlert = false
     @State private var showReportSheet = false
     @State private var showBlockAlert = false
+    @State private var showShareSheet = false
+    @State private var showCopiedToast = false
 
     init(postId: String) {
         _viewModel = StateObject(wrappedValue: PostDetailViewModel(postId: postId))
@@ -70,39 +72,87 @@ struct PostDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Menu {
-                    if isAuthor {
-                        Button {
-                            showEditSheet = true
-                        } label: {
-                            Label("수정", systemImage: "pencil")
-                        }
+                HStack(spacing: 12) {
+                    // Share Button
+                    Button {
+                        showShareSheet = true
+                    } label: {
+                        Image(systemName: "square.and.arrow.up")
+                    }
 
-                        Button(role: .destructive) {
-                            showDeleteAlert = true
-                        } label: {
-                            Label("삭제", systemImage: "trash")
+                    // Menu Button
+                    Menu {
+                        // Share Section
+                        Section {
+                            Button {
+                                showShareSheet = true
+                            } label: {
+                                Label("공유하기", systemImage: "square.and.arrow.up")
+                            }
+
+                            Button {
+                                if let post = viewModel.post {
+                                    if ShareService.shared.copyLink(for: .post(post)) {
+                                        showCopiedToast = true
+                                    }
+                                }
+                            } label: {
+                                Label("링크 복사", systemImage: "doc.on.doc")
+                            }
                         }
 
                         Divider()
-                    }
 
-                    Button {
-                        showReportSheet = true
-                    } label: {
-                        Label("신고", systemImage: "exclamationmark.triangle")
-                    }
+                        if isAuthor {
+                            Button {
+                                showEditSheet = true
+                            } label: {
+                                Label("수정", systemImage: "pencil")
+                            }
 
-                    if !isAuthor {
-                        Button(role: .destructive) {
-                            showBlockAlert = true
+                            Button(role: .destructive) {
+                                showDeleteAlert = true
+                            } label: {
+                                Label("삭제", systemImage: "trash")
+                            }
+
+                            Divider()
+                        }
+
+                        Button {
+                            showReportSheet = true
                         } label: {
-                            Label("사용자 차단", systemImage: "person.fill.xmark")
+                            Label("신고", systemImage: "exclamationmark.triangle")
+                        }
+
+                        if !isAuthor {
+                            Button(role: .destructive) {
+                                showBlockAlert = true
+                            } label: {
+                                Label("사용자 차단", systemImage: "person.fill.xmark")
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $showShareSheet) {
+            if let post = viewModel.post {
+                ShareSheetView(items: ShareService.shared.generateShareItems(for: .post(post)))
+            }
+        }
+        .overlay(alignment: .top) {
+            if showCopiedToast {
+                CopiedToast()
+                    .onAppear {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                            withAnimation {
+                                showCopiedToast = false
+                            }
                         }
                     }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                }
             }
         }
         .sheet(isPresented: $showEditSheet) {

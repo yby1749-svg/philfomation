@@ -10,6 +10,8 @@ struct BusinessDetailView: View {
     @StateObject private var viewModel = BusinessViewModel()
     @State private var showReviewForm = false
     @State private var showChat = false
+    @State private var showShareSheet = false
+    @State private var showCopiedToast = false
 
     let business: Business
 
@@ -102,11 +104,50 @@ struct BusinessDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button {
-                    shareBusiness()
-                } label: {
-                    Image(systemName: "square.and.arrow.up")
+                HStack(spacing: 12) {
+                    // Share Button
+                    Button {
+                        showShareSheet = true
+                    } label: {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+
+                    // Menu Button
+                    Menu {
+                        Section {
+                            Button {
+                                showShareSheet = true
+                            } label: {
+                                Label("공유하기", systemImage: "square.and.arrow.up")
+                            }
+
+                            Button {
+                                if ShareService.shared.copyLink(for: .business(business)) {
+                                    showCopiedToast = true
+                                }
+                            } label: {
+                                Label("링크 복사", systemImage: "doc.on.doc")
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
                 }
+            }
+        }
+        .sheet(isPresented: $showShareSheet) {
+            ShareSheetView(items: ShareService.shared.generateShareItems(for: .business(business)))
+        }
+        .overlay(alignment: .top) {
+            if showCopiedToast {
+                CopiedToast()
+                    .onAppear {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                            withAnimation {
+                                showCopiedToast = false
+                            }
+                        }
+                    }
             }
         }
         .task {
@@ -120,27 +161,6 @@ struct BusinessDetailView: View {
         }
     }
 
-    private func shareBusiness() {
-        guard let businessId = business.id,
-              let shareURL = DeepLinkManager.shared.universalShareURL(for: .business(id: businessId)) else { return }
-
-        let text = """
-        \(business.name)
-        \(business.category.rawValue) | \(business.address)
-
-        Philfomation에서 보기: \(shareURL.absoluteString)
-        """
-
-        let activityVC = UIActivityViewController(
-            activityItems: [text, shareURL],
-            applicationActivities: nil
-        )
-
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let rootVC = windowScene.windows.first?.rootViewController {
-            rootVC.present(activityVC, animated: true)
-        }
-    }
 }
 
 struct PhotoGallery: View {

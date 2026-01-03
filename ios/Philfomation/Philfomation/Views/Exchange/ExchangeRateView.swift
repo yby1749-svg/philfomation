@@ -8,9 +8,15 @@ import SwiftUI
 struct ExchangeRateView: View {
     @StateObject private var viewModel = ExchangeRateViewModel()
     @FocusState private var focusedField: Field?
+    @State private var showShareSheet = false
+    @State private var showCopiedToast = false
 
     enum Field {
         case krw, php
+    }
+
+    private var currentRate: Double {
+        viewModel.krwToPhpRate?.rate ?? 0
     }
 
     var body: some View {
@@ -34,11 +40,46 @@ struct ExchangeRateView: View {
             await viewModel.refresh()
         }
         .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    Button {
+                        showShareSheet = true
+                    } label: {
+                        Label("환율 공유하기", systemImage: "square.and.arrow.up")
+                    }
+
+                    Button {
+                        if ShareService.shared.copyLink(for: .exchangeRate(rate: currentRate, currency: "PHP")) {
+                            showCopiedToast = true
+                        }
+                    } label: {
+                        Label("링크 복사", systemImage: "doc.on.doc")
+                    }
+                } label: {
+                    Image(systemName: "square.and.arrow.up")
+                }
+            }
+
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
                 Button("완료") {
                     focusedField = nil
                 }
+            }
+        }
+        .sheet(isPresented: $showShareSheet) {
+            ShareSheetView(items: ShareService.shared.generateShareItems(for: .exchangeRate(rate: currentRate, currency: "PHP")))
+        }
+        .overlay(alignment: .top) {
+            if showCopiedToast {
+                CopiedToast()
+                    .onAppear {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                            withAnimation {
+                                showCopiedToast = false
+                            }
+                        }
+                    }
             }
         }
     }
