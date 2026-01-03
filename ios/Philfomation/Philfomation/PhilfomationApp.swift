@@ -58,6 +58,7 @@ struct PhilfomationApp: App {
                 .environmentObject(themeManager)
                 .environmentObject(deepLinkManager)
                 .preferredColorScheme(themeManager.colorScheme)
+                .tint(themeManager.currentAccentColor)
                 .onOpenURL { url in
                     _ = DeepLinkManager.shared.handleURL(url)
                 }

@@ -52,6 +52,31 @@ struct SettingsView: View {
                     .onChange(of: themeManager.currentTheme) { newTheme in
                         themeManager.setTheme(newTheme)
                     }
+
+                    // Accent Color Picker
+                    NavigationLink {
+                        AccentColorPickerView(themeManager: themeManager)
+                    } label: {
+                        HStack {
+                            Label("강조 색상", systemImage: "paintpalette.fill")
+                            Spacer()
+                            Circle()
+                                .fill(themeManager.currentAccentColor)
+                                .frame(width: 24, height: 24)
+                        }
+                    }
+
+                    // Font Size Picker
+                    NavigationLink {
+                        FontSizePickerView(themeManager: themeManager)
+                    } label: {
+                        HStack {
+                            Label("글자 크기", systemImage: "textformat.size")
+                            Spacer()
+                            Text(themeManager.fontSize.rawValue)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
 
                 Section("앱 정보") {
@@ -293,6 +318,138 @@ struct SettingsView: View {
                 showNotificationAlert = true
             }
         }
+    }
+}
+
+// MARK: - Accent Color Picker View
+struct AccentColorPickerView: View {
+    @ObservedObject var themeManager: ThemeManager
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        List {
+            Section {
+                ForEach(AccentColorOption.allCases) { color in
+                    Button {
+                        themeManager.setAccentColor(color)
+                    } label: {
+                        HStack(spacing: 16) {
+                            Circle()
+                                .fill(color.color)
+                                .frame(width: 32, height: 32)
+
+                            Text(color.rawValue)
+                                .foregroundStyle(.primary)
+
+                            Spacer()
+
+                            if themeManager.accentColor == color {
+                                Image(systemName: "checkmark")
+                                    .foregroundStyle(color.color)
+                                    .fontWeight(.semibold)
+                            }
+                        }
+                    }
+                }
+            } header: {
+                Text("앱 전체에 적용되는 강조 색상을 선택하세요")
+            } footer: {
+                Text("버튼, 링크, 아이콘 등에 적용됩니다")
+            }
+
+            Section("미리보기") {
+                VStack(spacing: 16) {
+                    HStack(spacing: 12) {
+                        Button("버튼") {}
+                            .buttonStyle(.borderedProminent)
+                            .tint(themeManager.currentAccentColor)
+
+                        Button("보조 버튼") {}
+                            .buttonStyle(.bordered)
+                            .tint(themeManager.currentAccentColor)
+                    }
+
+                    HStack(spacing: 16) {
+                        Label("좋아요", systemImage: "heart.fill")
+                            .foregroundStyle(themeManager.currentAccentColor)
+
+                        Label("북마크", systemImage: "bookmark.fill")
+                            .foregroundStyle(themeManager.currentAccentColor)
+
+                        Label("공유", systemImage: "square.and.arrow.up")
+                            .foregroundStyle(themeManager.currentAccentColor)
+                    }
+                    .font(.callout)
+
+                    Toggle("토글 예시", isOn: .constant(true))
+                        .tint(themeManager.currentAccentColor)
+                }
+                .padding(.vertical, 8)
+            }
+        }
+        .navigationTitle("강조 색상")
+        .navigationBarTitleDisplayMode(.inline)
+        .tint(themeManager.currentAccentColor)
+    }
+}
+
+// MARK: - Font Size Picker View
+struct FontSizePickerView: View {
+    @ObservedObject var themeManager: ThemeManager
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        List {
+            Section {
+                ForEach(FontSizeOption.allCases) { size in
+                    Button {
+                        themeManager.setFontSize(size)
+                    } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(size.rawValue)
+                                    .font(.system(size: size.bodySize))
+                                    .foregroundStyle(.primary)
+
+                                Text("예시 텍스트입니다")
+                                    .font(.system(size: size.bodySize * 0.8))
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Spacer()
+
+                            if themeManager.fontSize == size {
+                                Image(systemName: "checkmark")
+                                    .foregroundStyle(themeManager.currentAccentColor)
+                                    .fontWeight(.semibold)
+                            }
+                        }
+                    }
+                }
+            } header: {
+                Text("글자 크기를 선택하세요")
+            } footer: {
+                Text("일부 텍스트에 적용됩니다. 시스템 설정의 글자 크기도 함께 적용됩니다.")
+            }
+
+            Section("미리보기") {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("제목 텍스트")
+                        .font(.system(size: themeManager.fontSize.bodySize * 1.3, weight: .bold))
+
+                    Text("본문 텍스트입니다. 이 텍스트는 선택한 글자 크기에 따라 변경됩니다.")
+                        .font(.system(size: themeManager.fontSize.bodySize))
+
+                    Text("보조 텍스트")
+                        .font(.system(size: themeManager.fontSize.bodySize * 0.8))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 8)
+            }
+        }
+        .navigationTitle("글자 크기")
+        .navigationBarTitleDisplayMode(.inline)
+        .tint(themeManager.currentAccentColor)
     }
 }
 
