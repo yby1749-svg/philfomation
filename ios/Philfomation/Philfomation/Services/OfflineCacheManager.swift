@@ -4,12 +4,22 @@
 //
 
 import Foundation
+import Combine
 
-class OfflineCacheManager {
+class OfflineCacheManager: ObservableObject {
     static let shared = OfflineCacheManager()
+
+    @Published var isOfflineMode = false
+    @Published var lastCacheUpdate: Date?
 
     private let fileManager = FileManager.default
     private let cacheDirectory: URL
+    private let networkMonitor = NetworkMonitor.shared
+    private var cancellables = Set<AnyCancellable>()
+
+    // Cache settings
+    private let maxCacheSize: Int64 = 100 * 1024 * 1024  // 100 MB
+    private let defaultCacheAge: TimeInterval = 24 * 3600  // 24 hours
 
     private init() {
         guard let documentsDirectory = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first else {
@@ -21,6 +31,31 @@ class OfflineCacheManager {
         if !fileManager.fileExists(atPath: cacheDirectory.path) {
             try? fileManager.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
         }
+
+        setupNetworkObserver()
+        loadLastCacheUpdate()
+    }
+
+    // MARK: - Network Observer
+
+    private func setupNetworkObserver() {
+        networkMonitor.$isConnected
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] isConnected in
+                self?.isOfflineMode = !isConnected
+            }
+            .store(in: &cancellables)
+
+        isOfflineMode = !networkMonitor.isConnected
+    }
+
+    private func loadLastCacheUpdate() {
+        lastCacheUpdate = UserDefaults.standard.object(forKey: "lastCacheUpdate") as? Date
+    }
+
+    private func saveLastCacheUpdate() {
+        lastCacheUpdate = Date()
+        UserDefaults.standard.set(lastCacheUpdate, forKey: "lastCacheUpdate")
     }
 
     // MARK: - Generic Cache Methods
@@ -118,17 +153,156 @@ class OfflineCacheManager {
         formatter.countStyle = .file
         return formatter.string(fromByteCount: cacheSize)
     }
+
+    // MARK: - Automatic Cache Cleanup
+
+    func cleanupIfNeeded() {
+        if cacheSize > maxCacheSize {
+            cleanupOldestFiles(targetSize: maxCacheSize / 2)
+        }
+    }
+
+    private func cleanupOldestFiles(targetSize: Int64) {
+        guard let enumerator = fileManager.enumerator(
+            at: cacheDirectory,
+            includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey]
+        ) else { return }
+
+        var files: [(url: URL, date: Date, size: Int64)] = []
+
+        for case let fileURL as URL in enumerator {
+            if let values = try? fileURL.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey]),
+               let date = values.contentModificationDate,
+               let size = values.fileSize {
+                files.append((fileURL, date, Int64(size)))
+            }
+        }
+
+        // Sort by date (oldest first)
+        files.sort { $0.date < $1.date }
+
+        var currentSize = cacheSize
+        for file in files {
+            if currentSize <= targetSize { break }
+            try? fileManager.removeItem(at: file.url)
+            currentSize -= file.size
+        }
+    }
+
+    func cleanupExpiredCache(maxAge: TimeInterval? = nil) {
+        let age = maxAge ?? defaultCacheAge
+        let expiredDate = Date().addingTimeInterval(-age)
+
+        guard let enumerator = fileManager.enumerator(
+            at: cacheDirectory,
+            includingPropertiesForKeys: [.contentModificationDateKey]
+        ) else { return }
+
+        for case let fileURL as URL in enumerator {
+            if let values = try? fileURL.resourceValues(forKeys: [.contentModificationDateKey]),
+               let date = values.contentModificationDate,
+               date < expiredDate {
+                try? fileManager.removeItem(at: fileURL)
+            }
+        }
+    }
+
+    // MARK: - Cache Status
+
+    var lastUpdateFormatted: String? {
+        guard let date = lastCacheUpdate else { return nil }
+
+        let formatter = RelativeDateTimeFormatter()
+        formatter.locale = Locale(identifier: "ko_KR")
+        formatter.unitsStyle = .full
+        return formatter.localizedString(for: date, relativeTo: Date())
+    }
+
+    func getCacheInfo(forKey key: CacheKey) -> CacheInfo? {
+        let fileURL = cacheDirectory.appendingPathComponent("\(key.rawValue).json")
+
+        guard fileManager.fileExists(atPath: fileURL.path),
+              let attributes = try? fileManager.attributesOfItem(atPath: fileURL.path) else {
+            return nil
+        }
+
+        let size = (attributes[.size] as? Int64) ?? 0
+        let modDate = (attributes[.modificationDate] as? Date) ?? Date()
+
+        return CacheInfo(
+            key: key,
+            size: size,
+            lastModified: modDate,
+            isValid: isCacheValid(forKey: key)
+        )
+    }
+
+    var allCacheInfo: [CacheInfo] {
+        CacheKey.allCases.compactMap { getCacheInfo(forKey: $0) }
+    }
+
+    // MARK: - Prefetch Data for Offline
+
+    func prefetchForOffline() async {
+        guard networkMonitor.isConnected else { return }
+
+        // Save update time
+        saveLastCacheUpdate()
+
+        // Cleanup old cache first
+        cleanupExpiredCache()
+        cleanupIfNeeded()
+    }
+}
+
+// MARK: - Cache Info
+
+struct CacheInfo: Identifiable {
+    let key: CacheKey
+    let size: Int64
+    let lastModified: Date
+    let isValid: Bool
+
+    var id: String { key.rawValue }
+
+    var formattedSize: String {
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useKB, .useMB]
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: size)
+    }
+
+    var lastModifiedFormatted: String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.locale = Locale(identifier: "ko_KR")
+        return formatter.localizedString(for: lastModified, relativeTo: Date())
+    }
 }
 
 // MARK: - Cache Keys
 
-enum CacheKey: String {
+enum CacheKey: String, CaseIterable {
     case businesses
     case posts
     case exchangeRates
     case userProfile
     case bookmarks
     case notifications
+    case comments
+    case messages
+
+    var displayName: String {
+        switch self {
+        case .businesses: return "업소 정보"
+        case .posts: return "게시글"
+        case .exchangeRates: return "환율 정보"
+        case .userProfile: return "프로필"
+        case .bookmarks: return "북마크"
+        case .notifications: return "알림"
+        case .comments: return "댓글"
+        case .messages: return "메시지"
+        }
+    }
 }
 
 // MARK: - Convenience Extensions
