@@ -17,12 +17,39 @@ enum BusinessViewMode: String, CaseIterable {
     }
 }
 
+enum BusinessSortOption: String, CaseIterable {
+    case recent = "최신순"
+    case rating = "평점순"
+    case nearby = "거리순"
+
+    var icon: String {
+        switch self {
+        case .recent: return "clock"
+        case .rating: return "star.fill"
+        case .nearby: return "location.fill"
+        }
+    }
+}
+
 struct BusinessListView: View {
     @EnvironmentObject var viewModel: BusinessViewModel
     @EnvironmentObject var authViewModel: AuthViewModel
     @StateObject private var exchangeRateViewModel = ExchangeRateViewModel()
+    @ObservedObject private var locationManager = LocationManager.shared
     @State private var showCategoryFilter = false
     @State private var viewMode: BusinessViewMode = .list
+    @State private var sortOption: BusinessSortOption = .recent
+
+    private var sortedBusinesses: [Business] {
+        switch sortOption {
+        case .recent:
+            return viewModel.filteredBusinesses
+        case .rating:
+            return viewModel.filteredBusinesses.sorted { $0.rating > $1.rating }
+        case .nearby:
+            return locationManager.sortByDistance(viewModel.filteredBusinesses)
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -72,6 +99,9 @@ struct BusinessListView: View {
                         .padding(.trailing)
                 }
 
+                // Sort Options Bar
+                SortOptionsBar(selectedOption: $sortOption)
+
                 Divider()
 
                 // Business Content (List or Map)
@@ -87,7 +117,7 @@ struct BusinessListView: View {
                             }
                             .padding()
                         }
-                    } else if viewModel.filteredBusinesses.isEmpty {
+                    } else if sortedBusinesses.isEmpty {
                         Spacer()
                         EmptyStateView(
                             icon: "building.2",
@@ -98,14 +128,14 @@ struct BusinessListView: View {
                     } else {
                         ScrollView {
                             LazyVStack(spacing: 12) {
-                                ForEach(viewModel.filteredBusinesses) { business in
+                                ForEach(sortedBusinesses) { business in
                                     NavigationLink(destination: BusinessDetailView(business: business)) {
                                         BusinessCard(business: business)
                                     }
                                     .buttonStyle(.plain)
                                     .onAppear {
                                         // Load more when approaching the end
-                                        if business.id == viewModel.filteredBusinesses.last?.id {
+                                        if business.id == sortedBusinesses.last?.id {
                                             Task {
                                                 await viewModel.loadMoreBusinesses()
                                             }
@@ -384,6 +414,81 @@ struct LogoHeader: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 12)
+        .background(Color(.systemBackground))
+    }
+}
+
+// MARK: - Sort Options Bar
+struct SortOptionsBar: View {
+    @Binding var selectedOption: BusinessSortOption
+    @ObservedObject private var locationManager = LocationManager.shared
+
+    var body: some View {
+        HStack(spacing: 0) {
+            // Location status
+            if locationManager.authorizationStatus.isAuthorized {
+                HStack(spacing: 4) {
+                    Image(systemName: "location.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.green)
+                    if locationManager.currentLocation != nil {
+                        Text("위치 활성화")
+                            .font(.caption2)
+                            .foregroundStyle(.green)
+                    } else {
+                        Text("위치 확인 중...")
+                            .font(.caption2)
+                            .foregroundStyle(.orange)
+                    }
+                }
+                .padding(.leading, 16)
+            } else {
+                Button {
+                    locationManager.requestAuthorization()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "location.slash")
+                            .font(.caption2)
+                        Text("위치 활성화")
+                            .font(.caption2)
+                    }
+                    .foregroundStyle(Color(hex: "2563EB"))
+                }
+                .padding(.leading, 16)
+            }
+
+            Spacer()
+
+            // Sort options
+            HStack(spacing: 4) {
+                ForEach(BusinessSortOption.allCases, id: \.self) { option in
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            // If selecting nearby and location not authorized, request it
+                            if option == .nearby && !locationManager.authorizationStatus.isAuthorized {
+                                locationManager.requestAuthorization()
+                            }
+                            selectedOption = option
+                            HapticManager.shared.selectionChanged()
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: option.icon)
+                                .font(.caption2)
+                            Text(option.rawValue)
+                                .font(.caption)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(selectedOption == option ? Color(hex: "2563EB") : Color(.systemGray6))
+                        .foregroundStyle(selectedOption == option ? .white : .primary)
+                        .clipShape(Capsule())
+                    }
+                }
+            }
+            .padding(.trailing, 16)
+        }
+        .padding(.vertical, 8)
         .background(Color(.systemBackground))
     }
 }

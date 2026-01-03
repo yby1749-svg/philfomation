@@ -7,6 +7,7 @@ import SwiftUI
 
 struct BusinessCard: View {
     let business: Business
+    @ObservedObject private var locationManager = LocationManager.shared
 
     var body: some View {
         HStack(spacing: 12) {
@@ -47,6 +48,21 @@ struct BusinessCard: View {
                         .background(Color(hex: "F59E0B").opacity(0.15))
                         .foregroundStyle(Color(hex: "F59E0B"))
                         .clipShape(Capsule())
+
+                    // Distance Badge
+                    if let distance = locationManager.formattedDistance(to: business) {
+                        HStack(spacing: 2) {
+                            Image(systemName: "location.fill")
+                                .font(.caption2)
+                            Text(distance)
+                                .font(.caption)
+                        }
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color(hex: "2563EB").opacity(0.1))
+                        .foregroundStyle(Color(hex: "2563EB"))
+                        .clipShape(Capsule())
+                    }
 
                     Spacer()
                 }
