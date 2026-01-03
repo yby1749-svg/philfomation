@@ -38,6 +38,19 @@ struct SettingsView: View {
                                 .foregroundStyle(Color(hex: "2563EB"))
                         }
                     }
+
+                    NavigationLink {
+                        NotificationSettingsView()
+                    } label: {
+                        HStack {
+                            Text("알림 설정")
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
                 }
 
                 Section("화면") {
@@ -450,6 +463,311 @@ struct FontSizePickerView: View {
         .navigationTitle("글자 크기")
         .navigationBarTitleDisplayMode(.inline)
         .tint(themeManager.currentAccentColor)
+    }
+}
+
+// MARK: - Notification Settings View
+struct NotificationSettingsView: View {
+    @State private var preferences = NotificationPreferences.load()
+    @State private var showQuietHoursSheet = false
+
+    var body: some View {
+        List {
+            // 알림 타입별 설정
+            Section {
+                Toggle(isOn: $preferences.commentEnabled) {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("댓글 알림")
+                            Text("내 게시글에 새 댓글이 달리면 알림")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: "bubble.right.fill")
+                            .foregroundStyle(Color(hex: "2563EB"))
+                    }
+                }
+
+                Toggle(isOn: $preferences.likeEnabled) {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("좋아요 알림")
+                            Text("내 게시글/댓글에 좋아요를 받으면 알림")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: "heart.fill")
+                            .foregroundStyle(Color(hex: "DC2626"))
+                    }
+                }
+
+                Toggle(isOn: $preferences.replyEnabled) {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("답글 알림")
+                            Text("내 댓글에 답글이 달리면 알림")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: "arrowshape.turn.up.left.fill")
+                            .foregroundStyle(Color(hex: "7C3AED"))
+                    }
+                }
+
+                Toggle(isOn: $preferences.chatEnabled) {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("채팅 알림")
+                            Text("새 채팅 메시지가 오면 알림")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: "message.fill")
+                            .foregroundStyle(Color(hex: "059669"))
+                    }
+                }
+
+                Toggle(isOn: $preferences.systemEnabled) {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("시스템 알림")
+                            Text("앱 업데이트, 공지사항 등")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: "bell.fill")
+                            .foregroundStyle(.orange)
+                    }
+                }
+            } header: {
+                Text("알림 유형")
+            }
+
+            // 방해금지 모드
+            Section {
+                Toggle(isOn: $preferences.quietHoursEnabled) {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("방해금지 모드")
+                            Text("설정한 시간에는 알림을 받지 않습니다")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: "moon.fill")
+                            .foregroundStyle(.indigo)
+                    }
+                }
+
+                if preferences.quietHoursEnabled {
+                    Button {
+                        showQuietHoursSheet = true
+                    } label: {
+                        HStack {
+                            Text("시간 설정")
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            Text("\(formatHour(preferences.quietHoursStart)) ~ \(formatHour(preferences.quietHoursEnd))")
+                                .foregroundStyle(.secondary)
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                }
+            } header: {
+                Text("방해금지")
+            } footer: {
+                if preferences.quietHoursEnabled {
+                    Text("방해금지 시간에는 소리와 진동 없이 알림이 조용히 전달됩니다")
+                }
+            }
+
+            // 소리/진동 설정
+            Section {
+                Toggle(isOn: $preferences.soundEnabled) {
+                    Label("소리", systemImage: "speaker.wave.2.fill")
+                }
+
+                Toggle(isOn: $preferences.vibrationEnabled) {
+                    Label("진동", systemImage: "iphone.radiowaves.left.and.right")
+                }
+
+                Toggle(isOn: $preferences.showPreview) {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("미리보기 표시")
+                            Text("잠금 화면에서 알림 내용 미리보기")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: "eye.fill")
+                    }
+                }
+            } header: {
+                Text("알림 스타일")
+            }
+
+            // 초기화
+            Section {
+                Button(role: .destructive) {
+                    preferences = .default
+                    preferences.save()
+                } label: {
+                    Text("기본값으로 초기화")
+                }
+            }
+        }
+        .navigationTitle("알림 설정")
+        .navigationBarTitleDisplayMode(.inline)
+        .onChange(of: preferences.commentEnabled) { _ in preferences.save() }
+        .onChange(of: preferences.likeEnabled) { _ in preferences.save() }
+        .onChange(of: preferences.replyEnabled) { _ in preferences.save() }
+        .onChange(of: preferences.chatEnabled) { _ in preferences.save() }
+        .onChange(of: preferences.systemEnabled) { _ in preferences.save() }
+        .onChange(of: preferences.quietHoursEnabled) { _ in preferences.save() }
+        .onChange(of: preferences.soundEnabled) { _ in preferences.save() }
+        .onChange(of: preferences.vibrationEnabled) { _ in preferences.save() }
+        .onChange(of: preferences.showPreview) { _ in preferences.save() }
+        .sheet(isPresented: $showQuietHoursSheet) {
+            QuietHoursPickerView(
+                startHour: $preferences.quietHoursStart,
+                endHour: $preferences.quietHoursEnd
+            ) {
+                preferences.save()
+            }
+        }
+    }
+
+    private func formatHour(_ hour: Int) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ko_KR")
+        formatter.dateFormat = "a h시"
+
+        var components = DateComponents()
+        components.hour = hour
+
+        if let date = Calendar.current.date(from: components) {
+            return formatter.string(from: date)
+        }
+        return "\(hour):00"
+    }
+}
+
+// MARK: - Quiet Hours Picker View
+struct QuietHoursPickerView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Binding var startHour: Int
+    @Binding var endHour: Int
+    var onSave: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 24) {
+                VStack(spacing: 8) {
+                    Image(systemName: "moon.stars.fill")
+                        .font(.largeTitle)
+                        .foregroundStyle(.indigo)
+
+                    Text("방해금지 시간 설정")
+                        .font(.headline)
+
+                    Text("이 시간에는 알림 소리와 진동이 울리지 않습니다")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(.top, 20)
+
+                VStack(spacing: 16) {
+                    // 시작 시간
+                    HStack {
+                        Text("시작")
+                            .fontWeight(.medium)
+                        Spacer()
+                        Picker("시작 시간", selection: $startHour) {
+                            ForEach(0..<24) { hour in
+                                Text(formatHour(hour)).tag(hour)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                    }
+                    .padding()
+                    .background(Color(.systemGray6))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                    // 종료 시간
+                    HStack {
+                        Text("종료")
+                            .fontWeight(.medium)
+                        Spacer()
+                        Picker("종료 시간", selection: $endHour) {
+                            ForEach(0..<24) { hour in
+                                Text(formatHour(hour)).tag(hour)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                    }
+                    .padding()
+                    .background(Color(.systemGray6))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+                .padding(.horizontal)
+
+                // 미리보기
+                VStack(spacing: 8) {
+                    Text("설정된 시간")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Text("\(formatHour(startHour)) ~ \(formatHour(endHour))")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.indigo)
+                }
+                .padding()
+                .frame(maxWidth: .infinity)
+                .background(Color.indigo.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .padding(.horizontal)
+
+                Spacer()
+            }
+            .navigationTitle("방해금지 시간")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("취소") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("저장") {
+                        onSave()
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium])
+    }
+
+    private func formatHour(_ hour: Int) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ko_KR")
+        formatter.dateFormat = "a h시"
+
+        var components = DateComponents()
+        components.hour = hour
+
+        if let date = Calendar.current.date(from: components) {
+            return formatter.string(from: date)
+        }
+        return "\(hour):00"
     }
 }
 

@@ -10,6 +10,21 @@ import FirebaseFirestore
 import UserNotifications
 import UIKit
 
+// MARK: - Notification Action Identifiers
+enum NotificationActionIdentifier: String {
+    case reply = "REPLY_ACTION"
+    case markAsRead = "MARK_AS_READ_ACTION"
+    case viewPost = "VIEW_POST_ACTION"
+    case viewChat = "VIEW_CHAT_ACTION"
+}
+
+// MARK: - Notification Category Identifiers
+enum NotificationCategoryIdentifier: String {
+    case social = "SOCIAL_CATEGORY"      // 댓글, 좋아요, 답글
+    case chat = "CHAT_CATEGORY"          // 채팅 메시지
+    case system = "SYSTEM_CATEGORY"      // 시스템 알림
+}
+
 class PushNotificationService: NSObject, ObservableObject {
     static let shared = PushNotificationService()
 
@@ -17,6 +32,11 @@ class PushNotificationService: NSObject, ObservableObject {
     @Published var isPermissionGranted = false
 
     private let db = Firestore.firestore()
+
+    // Notification preferences
+    var preferences: NotificationPreferences {
+        NotificationPreferences.load()
+    }
 
     private override init() {
         super.init()
@@ -27,6 +47,73 @@ class PushNotificationService: NSObject, ObservableObject {
     func setup() {
         Messaging.messaging().delegate = self
         UNUserNotificationCenter.current().delegate = self
+        registerNotificationCategories()
+    }
+
+    // MARK: - Register Notification Categories
+
+    private func registerNotificationCategories() {
+        // Social category actions (댓글, 좋아요, 답글)
+        let viewPostAction = UNNotificationAction(
+            identifier: NotificationActionIdentifier.viewPost.rawValue,
+            title: "게시글 보기",
+            options: [.foreground]
+        )
+
+        let markAsReadAction = UNNotificationAction(
+            identifier: NotificationActionIdentifier.markAsRead.rawValue,
+            title: "읽음으로 표시",
+            options: []
+        )
+
+        let socialCategory = UNNotificationCategory(
+            identifier: NotificationCategoryIdentifier.social.rawValue,
+            actions: [viewPostAction, markAsReadAction],
+            intentIdentifiers: [],
+            hiddenPreviewsBodyPlaceholder: "새로운 알림이 있습니다",
+            categorySummaryFormat: "%u개의 새로운 알림",
+            options: []
+        )
+
+        // Chat category actions
+        let replyAction = UNTextInputNotificationAction(
+            identifier: NotificationActionIdentifier.reply.rawValue,
+            title: "답장",
+            options: [],
+            textInputButtonTitle: "보내기",
+            textInputPlaceholder: "메시지 입력..."
+        )
+
+        let viewChatAction = UNNotificationAction(
+            identifier: NotificationActionIdentifier.viewChat.rawValue,
+            title: "채팅 열기",
+            options: [.foreground]
+        )
+
+        let chatCategory = UNNotificationCategory(
+            identifier: NotificationCategoryIdentifier.chat.rawValue,
+            actions: [replyAction, viewChatAction, markAsReadAction],
+            intentIdentifiers: [],
+            hiddenPreviewsBodyPlaceholder: "새로운 메시지가 있습니다",
+            categorySummaryFormat: "%u개의 새로운 메시지",
+            options: []
+        )
+
+        // System category
+        let systemCategory = UNNotificationCategory(
+            identifier: NotificationCategoryIdentifier.system.rawValue,
+            actions: [markAsReadAction],
+            intentIdentifiers: [],
+            hiddenPreviewsBodyPlaceholder: "시스템 알림",
+            categorySummaryFormat: "%u개의 시스템 알림",
+            options: []
+        )
+
+        UNUserNotificationCenter.current().setNotificationCategories([
+            socialCategory,
+            chatCategory,
+            systemCategory
+        ])
     }
 
     // MARK: - Request Permission
@@ -189,11 +276,44 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
         let userInfo = notification.request.content.userInfo
         print("Received notification in foreground: \(userInfo)")
 
-        // Show banner and play sound even when app is in foreground
-        completionHandler([.banner, .sound, .badge])
+        // Check user preferences
+        let prefs = preferences
+
+        // Check quiet hours
+        if prefs.isInQuietHours() {
+            // During quiet hours, show banner only (no sound/vibration)
+            completionHandler([.banner, .badge])
+            return
+        }
+
+        // Check if notification type is enabled
+        if let type = userInfo["type"] as? String {
+            let notificationType = NotificationType(rawValue: type)
+
+            if let notifType = notificationType, !prefs.isEnabled(for: notifType) {
+                // This notification type is disabled, don't show
+                completionHandler([])
+                return
+            }
+
+            // Check chat notifications separately
+            if type == "chat" && !prefs.chatEnabled {
+                completionHandler([])
+                return
+            }
+        }
+
+        // Build presentation options based on preferences
+        var options: UNNotificationPresentationOptions = [.banner, .badge]
+
+        if prefs.soundEnabled {
+            options.insert(.sound)
+        }
+
+        completionHandler(options)
     }
 
-    // Handle notification tap
+    // Handle notification tap and actions
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse,
@@ -202,10 +322,73 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
         let userInfo = response.notification.request.content.userInfo
         print("User tapped notification: \(userInfo)")
 
-        // Handle deep linking based on notification data
-        handleNotificationTap(userInfo: userInfo)
+        // Handle notification actions
+        switch response.actionIdentifier {
+        case NotificationActionIdentifier.reply.rawValue:
+            handleReplyAction(response: response, userInfo: userInfo)
+
+        case NotificationActionIdentifier.markAsRead.rawValue:
+            handleMarkAsReadAction(userInfo: userInfo)
+
+        case NotificationActionIdentifier.viewPost.rawValue:
+            handleViewPostAction(userInfo: userInfo)
+
+        case NotificationActionIdentifier.viewChat.rawValue:
+            handleViewChatAction(userInfo: userInfo)
+
+        case UNNotificationDefaultActionIdentifier:
+            // Default tap action - handle deep linking
+            handleNotificationTap(userInfo: userInfo)
+
+        default:
+            break
+        }
 
         completionHandler()
+    }
+
+    // MARK: - Action Handlers
+
+    private func handleReplyAction(response: UNNotificationResponse, userInfo: [AnyHashable: Any]) {
+        guard let textResponse = response as? UNTextInputNotificationResponse else { return }
+        let replyText = textResponse.userText
+
+        if let chatId = userInfo["chatId"] as? String {
+            // Send reply message
+            NotificationCenter.default.post(
+                name: .sendChatReply,
+                object: nil,
+                userInfo: ["chatId": chatId, "message": replyText]
+            )
+        }
+    }
+
+    private func handleMarkAsReadAction(userInfo: [AnyHashable: Any]) {
+        if let notificationId = userInfo["notificationId"] as? String {
+            Task {
+                try? await NotificationService.shared.markAsRead(notificationId: notificationId)
+            }
+        }
+    }
+
+    private func handleViewPostAction(userInfo: [AnyHashable: Any]) {
+        if let postId = userInfo["postId"] as? String {
+            NotificationCenter.default.post(
+                name: .navigateToPost,
+                object: nil,
+                userInfo: ["postId": postId]
+            )
+        }
+    }
+
+    private func handleViewChatAction(userInfo: [AnyHashable: Any]) {
+        if let chatId = userInfo["chatId"] as? String {
+            NotificationCenter.default.post(
+                name: .navigateToChat,
+                object: nil,
+                userInfo: ["chatId": chatId]
+            )
+        }
     }
 
     private func handleNotificationTap(userInfo: [AnyHashable: Any]) {
@@ -213,7 +396,7 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
         guard let type = userInfo["type"] as? String else { return }
 
         switch type {
-        case "comment", "like":
+        case "comment", "like", "reply":
             if let postId = userInfo["postId"] as? String {
                 // Navigate to post detail
                 NotificationCenter.default.post(
@@ -231,8 +414,70 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
                     userInfo: ["chatId": chatId]
                 )
             }
+        case "business":
+            if let businessId = userInfo["businessId"] as? String {
+                NotificationCenter.default.post(
+                    name: .navigateToBusiness,
+                    object: nil,
+                    userInfo: ["businessId": businessId]
+                )
+            }
         default:
-            break
+            // For system or unknown types, open notifications view
+            NotificationCenter.default.post(name: .navigateToNotifications, object: nil)
+        }
+    }
+
+    // MARK: - Schedule Local Notification with Grouping
+
+    func scheduleLocalNotification(
+        title: String,
+        body: String,
+        type: NotificationType,
+        threadId: String? = nil,
+        userInfo: [String: Any] = [:]
+    ) {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+
+        // Set category based on type
+        switch type {
+        case .comment, .like, .reply:
+            content.categoryIdentifier = NotificationCategoryIdentifier.social.rawValue
+        case .system:
+            content.categoryIdentifier = NotificationCategoryIdentifier.system.rawValue
+        }
+
+        // Set thread identifier for grouping
+        if let threadId = threadId {
+            content.threadIdentifier = threadId
+        } else {
+            // Group by type if no specific thread
+            content.threadIdentifier = type.rawValue
+        }
+
+        // Add user info
+        var info = userInfo
+        info["type"] = type.rawValue
+        content.userInfo = info
+
+        // Sound based on preferences
+        if preferences.soundEnabled && !preferences.isInQuietHours() {
+            content.sound = .default
+        }
+
+        // Create request
+        let request = UNNotificationRequest(
+            identifier: UUID().uuidString,
+            content: content,
+            trigger: nil
+        )
+
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                print("Error scheduling notification: \(error)")
+            }
         }
     }
 }
@@ -241,4 +486,7 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
 extension Notification.Name {
     static let navigateToPost = Notification.Name("navigateToPost")
     static let navigateToChat = Notification.Name("navigateToChat")
+    static let navigateToBusiness = Notification.Name("navigateToBusiness")
+    static let navigateToNotifications = Notification.Name("navigateToNotifications")
+    static let sendChatReply = Notification.Name("sendChatReply")
 }

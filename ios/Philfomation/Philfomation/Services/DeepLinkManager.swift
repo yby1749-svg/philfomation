@@ -12,7 +12,8 @@ enum DeepLinkDestination: Equatable {
     case profile(id: String)
     case community
     case businesses
-    case chat
+    case chat(id: String? = nil)
+    case notifications
 
     var path: String {
         switch self {
@@ -21,7 +22,23 @@ enum DeepLinkDestination: Equatable {
         case .profile(let id): return "profile/\(id)"
         case .community: return "community"
         case .businesses: return "businesses"
-        case .chat: return "chat"
+        case .chat(let id):
+            if let id = id {
+                return "chat/\(id)"
+            }
+            return "chat"
+        case .notifications: return "notifications"
+        }
+    }
+
+    // Tab index for tab-based navigation
+    var tabIndex: Int? {
+        switch self {
+        case .businesses, .business: return 0
+        case .community, .post: return 1
+        case .chat: return 2
+        case .profile, .notifications: return 3
+        default: return nil
         }
     }
 }
@@ -30,13 +47,74 @@ class DeepLinkManager: ObservableObject {
     static let shared = DeepLinkManager()
 
     @Published var pendingDestination: DeepLinkDestination?
+    @Published var selectedTab: Int = 0
 
     // URL Scheme: philfomation://
     // Universal Link: https://philfomation.com/app/
     private let urlScheme = "philfomation"
     private let universalLinkHost = "philfomation.com"
 
-    private init() {}
+    private var cancellables = Set<AnyCancellable>()
+
+    private init() {
+        setupNotificationObservers()
+    }
+
+    // MARK: - Setup Notification Observers
+
+    private func setupNotificationObservers() {
+        // Navigate to post
+        NotificationCenter.default.publisher(for: .navigateToPost)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] notification in
+                if let postId = notification.userInfo?["postId"] as? String {
+                    self?.navigate(to: .post(id: postId))
+                }
+            }
+            .store(in: &cancellables)
+
+        // Navigate to chat
+        NotificationCenter.default.publisher(for: .navigateToChat)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] notification in
+                if let chatId = notification.userInfo?["chatId"] as? String {
+                    self?.navigate(to: .chat(id: chatId))
+                } else {
+                    self?.navigate(to: .chat())
+                }
+            }
+            .store(in: &cancellables)
+
+        // Navigate to business
+        NotificationCenter.default.publisher(for: .navigateToBusiness)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] notification in
+                if let businessId = notification.userInfo?["businessId"] as? String {
+                    self?.navigate(to: .business(id: businessId))
+                }
+            }
+            .store(in: &cancellables)
+
+        // Navigate to notifications
+        NotificationCenter.default.publisher(for: .navigateToNotifications)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.navigate(to: .notifications)
+            }
+            .store(in: &cancellables)
+    }
+
+    // MARK: - Navigate Helper
+
+    func navigate(to destination: DeepLinkDestination) {
+        // Update tab if needed
+        if let tabIndex = destination.tabIndex {
+            selectedTab = tabIndex
+        }
+
+        // Set pending destination for detail navigation
+        pendingDestination = destination
+    }
 
     // MARK: - Handle URL
 
@@ -63,27 +141,34 @@ class DeepLinkManager: ObservableObject {
         switch host {
         case "post":
             if !id.isEmpty {
-                pendingDestination = .post(id: id)
+                navigate(to: .post(id: id))
                 return true
             }
         case "business":
             if !id.isEmpty {
-                pendingDestination = .business(id: id)
+                navigate(to: .business(id: id))
                 return true
             }
         case "profile":
             if !id.isEmpty {
-                pendingDestination = .profile(id: id)
+                navigate(to: .profile(id: id))
                 return true
             }
         case "community":
-            pendingDestination = .community
+            navigate(to: .community)
             return true
         case "businesses":
-            pendingDestination = .businesses
+            navigate(to: .businesses)
             return true
         case "chat":
-            pendingDestination = .chat
+            if !id.isEmpty {
+                navigate(to: .chat(id: id))
+            } else {
+                navigate(to: .chat())
+            }
+            return true
+        case "notifications":
+            navigate(to: .notifications)
             return true
         default:
             break
@@ -103,27 +188,34 @@ class DeepLinkManager: ObservableObject {
         switch type {
         case "post":
             if !id.isEmpty {
-                pendingDestination = .post(id: id)
+                navigate(to: .post(id: id))
                 return true
             }
         case "business":
             if !id.isEmpty {
-                pendingDestination = .business(id: id)
+                navigate(to: .business(id: id))
                 return true
             }
         case "profile":
             if !id.isEmpty {
-                pendingDestination = .profile(id: id)
+                navigate(to: .profile(id: id))
                 return true
             }
         case "community":
-            pendingDestination = .community
+            navigate(to: .community)
             return true
         case "businesses":
-            pendingDestination = .businesses
+            navigate(to: .businesses)
             return true
         case "chat":
-            pendingDestination = .chat
+            if !id.isEmpty {
+                navigate(to: .chat(id: id))
+            } else {
+                navigate(to: .chat())
+            }
+            return true
+        case "notifications":
+            navigate(to: .notifications)
             return true
         default:
             break

@@ -61,6 +61,94 @@ enum NotificationType: String, Codable {
     }
 }
 
+// MARK: - Notification Preferences
+struct NotificationPreferences: Codable {
+    // 알림 타입별 설정
+    var commentEnabled: Bool = true
+    var likeEnabled: Bool = true
+    var replyEnabled: Bool = true
+    var systemEnabled: Bool = true
+    var chatEnabled: Bool = true
+
+    // 방해금지 모드
+    var quietHoursEnabled: Bool = false
+    var quietHoursStart: Int = 22  // 22:00
+    var quietHoursEnd: Int = 8     // 08:00
+
+    // 소리/진동 설정
+    var soundEnabled: Bool = true
+    var vibrationEnabled: Bool = true
+
+    // 미리보기 설정
+    var showPreview: Bool = true
+
+    // 기본값
+    static let `default` = NotificationPreferences()
+
+    // 저장 키
+    private static let storageKey = "notificationPreferences"
+
+    // 저장
+    func save() {
+        if let encoded = try? JSONEncoder().encode(self) {
+            UserDefaults.standard.set(encoded, forKey: Self.storageKey)
+        }
+    }
+
+    // 불러오기
+    static func load() -> NotificationPreferences {
+        guard let data = UserDefaults.standard.data(forKey: storageKey),
+              let preferences = try? JSONDecoder().decode(NotificationPreferences.self, from: data) else {
+            return .default
+        }
+        return preferences
+    }
+
+    // 현재 방해금지 시간인지 확인
+    func isInQuietHours() -> Bool {
+        guard quietHoursEnabled else { return false }
+
+        let calendar = Calendar.current
+        let now = Date()
+        let hour = calendar.component(.hour, from: now)
+
+        if quietHoursStart < quietHoursEnd {
+            // 같은 날 (예: 08:00 ~ 22:00)
+            return hour >= quietHoursStart && hour < quietHoursEnd
+        } else {
+            // 다음 날로 넘어가는 경우 (예: 22:00 ~ 08:00)
+            return hour >= quietHoursStart || hour < quietHoursEnd
+        }
+    }
+
+    // 알림 타입이 활성화되어 있는지 확인
+    func isEnabled(for type: NotificationType) -> Bool {
+        switch type {
+        case .comment: return commentEnabled
+        case .like: return likeEnabled
+        case .reply: return replyEnabled
+        case .system: return systemEnabled
+        }
+    }
+}
+
+// MARK: - Notification Category (for grouping)
+enum NotificationCategory: String {
+    case social = "SOCIAL"          // 댓글, 좋아요, 답글
+    case chat = "CHAT"              // 채팅 메시지
+    case system = "SYSTEM"          // 시스템 알림
+
+    var identifier: String { rawValue }
+
+    var summaryFormat: String {
+        switch self {
+        case .social: return "%u개의 새로운 알림"
+        case .chat: return "%u개의 새로운 메시지"
+        case .system: return "%u개의 시스템 알림"
+        }
+    }
+}
+
 // MARK: - Extensions
 extension AppNotification {
     var timeAgo: String {

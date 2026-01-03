@@ -117,6 +117,10 @@ struct HomeView: View {
         case .profile:
             selectedTab = .profile
             deepLinkManager.clearDestination()
+        case .notifications:
+            selectedTab = .profile
+            // TODO: Navigate to notifications view within profile
+            deepLinkManager.clearDestination()
         }
     }
 }
