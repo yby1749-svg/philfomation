@@ -176,41 +176,62 @@ struct SearchBar: View {
     @Binding var text: String
     var placeholder: String = "업소명, 주소 검색"
     var searchType: SearchType = .business
+    var showAdvancedSearch: Bool = true
     var onSearch: () -> Void
 
     @FocusState private var isFocused: Bool
     @ObservedObject private var historyManager = SearchHistoryManager.shared
+    @State private var showAdvancedSearchView = false
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
+            HStack(spacing: 8) {
+                HStack {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundStyle(.secondary)
 
-                TextField(placeholder, text: $text)
-                    .textFieldStyle(.plain)
-                    .submitLabel(.search)
-                    .focused($isFocused)
-                    .onSubmit {
-                        if !text.isEmpty {
-                            historyManager.addSearch(text, type: searchType)
+                    TextField(placeholder, text: $text)
+                        .textFieldStyle(.plain)
+                        .submitLabel(.search)
+                        .focused($isFocused)
+                        .onSubmit {
+                            if !text.isEmpty {
+                                historyManager.addSearch(text, type: searchType)
+                            }
+                            onSearch()
                         }
-                        onSearch()
-                    }
 
-                if !text.isEmpty {
+                    if !text.isEmpty {
+                        Button {
+                            text = ""
+                            onSearch()
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .padding(12)
+                .background(Color(.systemGray6))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                // Advanced Search Button
+                if showAdvancedSearch {
                     Button {
-                        text = ""
-                        onSearch()
+                        showAdvancedSearchView = true
                     } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
+                        Image(systemName: "slider.horizontal.3")
+                            .font(.title3)
+                            .foregroundStyle(Color(hex: "2563EB"))
+                            .frame(width: 44, height: 44)
+                            .background(Color(hex: "2563EB").opacity(0.1))
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
                     }
                 }
             }
-            .padding(12)
-            .background(Color(.systemGray6))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .sheet(isPresented: $showAdvancedSearchView) {
+                AdvancedSearchView()
+            }
 
             // Search History
             if isFocused && text.isEmpty {
