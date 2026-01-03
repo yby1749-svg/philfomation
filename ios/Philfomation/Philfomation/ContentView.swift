@@ -9,16 +9,20 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
 
     var body: some View {
         Group {
-            if authViewModel.isLoggedIn {
+            if !hasCompletedOnboarding {
+                OnboardingView()
+            } else if authViewModel.isLoggedIn {
                 HomeView()
             } else {
                 LoginView()
             }
         }
         .animation(.easeInOut, value: authViewModel.isLoggedIn)
+        .animation(.easeInOut, value: hasCompletedOnboarding)
     }
 }
 
